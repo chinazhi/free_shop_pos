@@ -44,18 +44,15 @@ export const useProductsStore = defineStore('products', () => {
     if (initializationPromise) {
       await initializationPromise
       // 重新从数据库加载商品
-      const { ipcRenderer } = require('electron')
-      const dbProducts = await ipcRenderer.invoke('get-products')
+      const dbProducts = await window.ipcRenderer.invoke('get-products')
       products.value = dbProducts
       return
     }
     
     try {
       loading.value = true
-      const { ipcRenderer } = require('electron')
-      
       // 从数据库加载商品
-      let dbProducts = await ipcRenderer.invoke('get-products')   
+      let dbProducts = await window.ipcRenderer.invoke('get-products')   
       products.value = dbProducts
       console.log('[loadProducts] products.value:', JSON.parse(JSON.stringify(products.value)))
     } catch (error) {
@@ -72,8 +69,7 @@ export const useProductsStore = defineStore('products', () => {
 
   const loadCategories = async () => {
     try {
-      const { ipcRenderer } = require('electron')
-      const dbCategories = await ipcRenderer.invoke('get-categories')
+      const dbCategories = await window.ipcRenderer.invoke('get-categories')
       categories.value = dbCategories
     } catch (error) {
       console.error('加载分类失败:', error)
@@ -90,8 +86,7 @@ export const useProductsStore = defineStore('products', () => {
 
   const addCategory = async (categoryData) => {
     try {
-      const { ipcRenderer } = require('electron')
-      const newCategory = await ipcRenderer.invoke('add-category', categoryData)
+      const newCategory = await window.ipcRenderer.invoke('add-category', categoryData)
       categories.value.push(newCategory)
       return newCategory
     } catch (error) {
@@ -102,8 +97,7 @@ export const useProductsStore = defineStore('products', () => {
 
   const updateCategory = async (id, categoryData) => {
     try {
-      const { ipcRenderer } = require('electron')
-      const updatedCategory = await ipcRenderer.invoke('update-category', id, categoryData)
+      const updatedCategory = await window.ipcRenderer.invoke('update-category', id, categoryData)
       const index = categories.value.findIndex(c => c.id === id)
       if (index !== -1) {
         categories.value[index] = updatedCategory
@@ -117,8 +111,7 @@ export const useProductsStore = defineStore('products', () => {
 
   const deleteCategory = async (id) => {
     try {
-      const { ipcRenderer } = require('electron')
-      await ipcRenderer.invoke('delete-category', id)
+      await window.ipcRenderer.invoke('delete-category', id)
       const index = categories.value.findIndex(c => c.id === id)
       if (index !== -1) {
         categories.value.splice(index, 1)
@@ -141,8 +134,7 @@ export const useProductsStore = defineStore('products', () => {
         throw new Error(`条码 "${productData.barcode}" 已存在，请使用其他条码`)
       }
       
-      const { ipcRenderer } = require('electron')
-      const newProduct = await ipcRenderer.invoke('add-product', productData)
+      const newProduct = await window.ipcRenderer.invoke('add-product', productData)
       products.value.push(newProduct)
       return newProduct
     } catch (error) {
@@ -173,8 +165,7 @@ export const useProductsStore = defineStore('products', () => {
       }
       
       // 调用主进程更新商品
-      const { ipcRenderer } = require('electron')
-      const updatedProduct = await ipcRenderer.invoke('update-product', id, productData)
+      const updatedProduct = await window.ipcRenderer.invoke('update-product', id, productData)
 
       // 更新本地状态
       const index = products.value.findIndex(p => p.id === id)
@@ -191,8 +182,7 @@ export const useProductsStore = defineStore('products', () => {
 
   const deleteProduct = async (id) => {
     try {
-      const { ipcRenderer } = require('electron')
-      await ipcRenderer.invoke('delete-product', id)
+      await window.ipcRenderer.invoke('delete-product', id)
       const index = products.value.findIndex(p => p.id === id)
       if (index !== -1) {
         products.value.splice(index, 1)
@@ -251,8 +241,7 @@ export const useProductsStore = defineStore('products', () => {
       }
 
       // 使用事务性库存更新
-      const { ipcRenderer } = require('electron')
-      const updatedProduct = await ipcRenderer.invoke('update-stock-with-log', productId, {
+      const updatedProduct = await window.ipcRenderer.invoke('update-stock-with-log', productId, {
         stock: newStock
       }, {
         product_id: productId,
@@ -282,8 +271,7 @@ export const useProductsStore = defineStore('products', () => {
   // 获取库存变动记录
   const getInventoryLogs = async (filters = {}) => {
     try {
-      const { ipcRenderer } = require('electron')
-      const logs = await ipcRenderer.invoke('get-inventory-logs', filters)
+      const logs = await window.ipcRenderer.invoke('get-inventory-logs', filters)
       return logs
     } catch (error) {
       console.error('获取库存记录失败:', error)

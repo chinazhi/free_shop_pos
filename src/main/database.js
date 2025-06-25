@@ -199,6 +199,26 @@ class Database {
     const memberStmt = this.db.prepare('INSERT OR IGNORE INTO members (member_no, name, phone, email, points, total_spent, level) VALUES (?, ?, ?, ?, ?, ?, ?)');
     for (const row of defaultMembers) await runAsync(memberStmt, row);
     memberStmt.finalize();
+    // 初始化默认销售订单和明细
+    const defaultSales = [
+      // id自动递增，order_no, member_id, total_amount, discount_amount, tax_amount, final_amount, payment_method, payment_status, cashier, notes, created_at
+      ['20240125001', 2, 156.80, 15.68, 14.11, 155.23, 'wechat', 'completed', '张三', '', '2024-01-25T14:30:00Z'],
+      ['20240125002', null, 89.50, 0, 8.05, 97.55, 'cash', 'completed', '王五', '', '2024-01-25T15:45:00Z'],
+      ['20240125003', null, 234.60, 23.46, 19.00, 230.14, 'alipay', 'refunded', '张三', '', '2024-01-25T16:20:00Z']
+    ];
+    const saleStmt = this.db.prepare('INSERT OR IGNORE INTO sales (order_no, member_id, total_amount, discount_amount, tax_amount, final_amount, payment_method, payment_status, cashier, notes, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)');
+    for (const row of defaultSales) await runAsync(saleStmt, row);
+    saleStmt.finalize();
+    const defaultSaleItems = [
+      // sale_id, product_id, quantity, unit_price, total_price, discount, created_at
+      [1, 1, 2, 3.5, 7.0, 0.35, '2024-01-25T14:30:00Z'],
+      [1, 2, 1, 12.8, 12.8, 1.28, '2024-01-25T14:30:00Z'],
+      [2, 3, 2, 2.0, 4.0, 0, '2024-01-25T15:45:00Z'],
+      [3, 1, 5, 3.5, 17.5, 0.35, '2024-01-25T16:20:00Z']
+    ];
+    const saleItemStmt = this.db.prepare('INSERT OR IGNORE INTO sale_items (sale_id, product_id, quantity, unit_price, total_price, discount, created_at) VALUES (?, ?, ?, ?, ?, ?, ?)');
+    for (const row of defaultSaleItems) await runAsync(saleItemStmt, row);
+    saleItemStmt.finalize();
   }
 
   // 执行查询

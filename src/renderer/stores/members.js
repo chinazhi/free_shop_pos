@@ -56,10 +56,8 @@ export const useMembersStore = defineStore('members', () => {
   const loadMembers = async () => {
     try {
       loading.value = true
-      const { ipcRenderer } = require('electron')
-      
       // 从数据库加载会员
-      let dbMembers = await ipcRenderer.invoke('get-members')
+      let dbMembers = await window.ipcRenderer.invoke('get-members')
       members.value = dbMembers
     } catch (error) {
       console.error('加载会员失败:', error)
@@ -70,8 +68,7 @@ export const useMembersStore = defineStore('members', () => {
 
   const addMember = async (memberData) => {
     try {
-      const { ipcRenderer } = require('electron')
-      const newMember = await ipcRenderer.invoke('add-member', memberData)
+      const newMember = await window.ipcRenderer.invoke('add-member', memberData)
       members.value.push(newMember)
       return newMember
     } catch (error) {
@@ -82,8 +79,7 @@ export const useMembersStore = defineStore('members', () => {
 
   const updateMember = async (id, memberData) => {
     try {
-      const { ipcRenderer } = require('electron')
-      const updatedMember = await ipcRenderer.invoke('update-member', id, memberData)
+      const updatedMember = await window.ipcRenderer.invoke('update-member', id, memberData)
       const index = members.value.findIndex(m => m.id === id)
       if (index !== -1) {
         members.value[index] = updatedMember
@@ -97,8 +93,7 @@ export const useMembersStore = defineStore('members', () => {
 
   const deleteMember = async (id) => {
     try {
-      const { ipcRenderer } = require('electron')
-      await ipcRenderer.invoke('delete-member', id)
+      await window.ipcRenderer.invoke('delete-member', id)
       const index = members.value.findIndex(m => m.id === id)
       if (index !== -1) {
         members.value.splice(index, 1)
@@ -147,8 +142,7 @@ export const useMembersStore = defineStore('members', () => {
       }
 
       // 更新数据库中的会员积分
-      const { ipcRenderer } = require('electron')
-      const updatedMember = await ipcRenderer.invoke('update-member-points', memberId, {
+      const updatedMember = await window.ipcRenderer.invoke('update-member-points', memberId, {
         points: newPoints,
         type: type,
         change_amount: type === 'set' ? newPoints - oldPoints : points,
@@ -174,8 +168,7 @@ export const useMembersStore = defineStore('members', () => {
   // 获取会员消费记录
   const getMemberOrders = async (memberId) => {
     try {
-      const { ipcRenderer } = require('electron')
-      const orders = await ipcRenderer.invoke('get-member-orders', memberId)
+      const orders = await window.ipcRenderer.invoke('get-member-orders', memberId)
       return orders
     } catch (error) {
       console.error('获取会员订单失败:', error)

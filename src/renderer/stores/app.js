@@ -34,16 +34,37 @@ export const useAppStore = defineStore('app', () => {
 
   // 加载系统设置
   const loadSettings = async () => {
-    // 这里后续会连接到数据库
-    // 暂时使用默认设置
-    console.log('加载系统设置')
+    try {
+      const settingsArr = await window.ipcRenderer.invoke('get-settings')
+      if (Array.isArray(settingsArr)) {
+        for (const s of settingsArr) {
+          if (settings.hasOwnProperty(s.key)) {
+            // 尝试自动类型转换
+            let val = s.value
+            if (typeof settings[s.key] === 'boolean') {
+              val = s.value === 'true' || s.value === true
+            } else if (typeof settings[s.key] === 'number') {
+              val = Number(s.value)
+            }
+            settings[s.key] = val
+          }
+        }
+      }
+    } catch (e) {
+      console.error('加载系统设置失败:', e)
+    }
   }
 
   // 更新设置
   const updateSettings = async (newSettings) => {
-    Object.assign(settings, newSettings)
-    // 这里后续会保存到数据库
-    console.log('更新设置:', newSettings)
+    try {
+      Object.assign(settings, newSettings)
+      // 组装要保存的设置数组
+      const settingsArr = Object.keys(settings).map(key => ({ key, value: settings[key] }))
+      await window.ipcRenderer.invoke('update-settings', settingsArr)
+    } catch (e) {
+      console.error('保存系统设置失败:', e)
+    }
   }
 
   // 设置当前用户

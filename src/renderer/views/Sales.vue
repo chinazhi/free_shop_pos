@@ -369,6 +369,7 @@
 <script setup>
 import { ref, computed, reactive, onMounted } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
+const ipcRenderer = window.ipcRenderer
 
 // 响应式数据
 const loading = ref(false)
@@ -387,76 +388,45 @@ const refundType = ref('full')
 const refundAmount = ref(0)
 const refundReason = ref('')
 
-// 模拟销售数据
-const sales = ref([
-  {
-    id: 1,
-    order_no: '20240125001',
-    cashier: '张三',
-    member_name: '李四',
-    items_count: 3,
-    subtotal: 156.80,
-    discount_amount: 15.68,
-    tax_amount: 14.11,
-    total_amount: 155.23,
-    payment_method: 'wechat',
-    status: 'completed',
-    received_amount: 160.00,
-    change_amount: 4.77,
-    created_at: '2024-01-25T14:30:00Z'
-  },
-  {
-    id: 2,
-    order_no: '20240125002',
-    cashier: '王五',
-    member_name: null,
-    items_count: 2,
-    subtotal: 89.50,
-    discount_amount: 0,
-    tax_amount: 8.05,
-    total_amount: 97.55,
-    payment_method: 'cash',
-    status: 'completed',
-    received_amount: 100.00,
-    change_amount: 2.45,
-    created_at: '2024-01-25T15:45:00Z'
-  },
-  {
-    id: 3,
-    order_no: '20240125003',
-    cashier: '张三',
-    member_name: '赵六',
-    items_count: 5,
-    subtotal: 234.60,
-    discount_amount: 23.46,
-    tax_amount: 19.00,
-    total_amount: 230.14,
-    payment_method: 'alipay',
-    status: 'refunded',
-    received_amount: 230.14,
-    change_amount: 0,
-    created_at: '2024-01-25T16:20:00Z'
-  }
-])
+// 销售数据
+const sales = ref([])
+const orderItems = ref([])
 
-// 模拟订单商品明细
-const orderItems = ref([
-  {
-    product_name: '可口可乐 330ml',
-    price: 3.50,
-    quantity: 2,
-    discount_amount: 0.35,
-    subtotal: 6.65
-  },
-  {
-    product_name: '薯片 大包装',
-    price: 12.80,
-    quantity: 1,
-    discount_amount: 1.28,
-    subtotal: 11.52
+async function loadSales() {
+  loading.value = true
+  let sql = `SELECT s.id, s.order_no, s.cashier, m.name as member_name, s.total_amount, s.discount_amount, s.tax_amount, s.final_amount, s.payment_method, s.payment_status as status, s.created_at,
+    (SELECT COUNT(*) FROM sale_items si WHERE si.sale_id = s.id) as items_count,
+    s.final_amount as subtotal, 0 as received_amount, 0 as change_amount
+    FROM sales s LEFT JOIN members m ON s.member_id = m.id ORDER BY s.created_at DESC`;
+  try {
+    const result = await ipcRenderer.invoke('db-query', sql)
+    sales.value = result
+  } catch (e) {
+    ElMessage.error('加载销售数据失败')
+  } finally {
+    loading.value = false
   }
-])
+}
 
+async function loadOrderItems(orderId) {
+  let sql = `SELECT p.name as product_name, si.unit_price as price, si.quantity, si.discount as discount_amount, si.total_price as subtotal
+    FROM sale_items si JOIN products p ON si.product_id = p.id WHERE si.sale_id = ?`;
+  try {
+    orderItems.value = await ipcRenderer.invoke('db-query', sql, [orderId])
+  } catch (e) {
+    orderItems.value = []
+  }
+}
+
+const viewOrder = (order) => {
+  selectedOrder.value = order
+  loadOrderItems(order.id)
+  showDetailDialog.value = true
+}
+
+onMounted(() => {
+  loadSales()
+})
 // 计算属性
 const filteredSales = computed(() => {
   let filtered = sales.value
@@ -579,11 +549,6 @@ const getStatusText = (status) => {
 
 const formatDateTime = (dateString) => {
   return new Date(dateString).toLocaleString('zh-CN')
-}
-
-const viewOrder = (order) => {
-  selectedOrder.value = order
-  showDetailDialog.value = true
 }
 
 const printReceipt = (order) => {
@@ -822,3 +787,6 @@ onMounted(() => {
   }
 }
 </style>
+
+// 保证组件能被动态导入
+export default {}

@@ -599,8 +599,7 @@ const initializeDatabase = async () => {
       }
     )
     
-    const { ipcRenderer } = require('electron')
-    const result = await ipcRenderer.invoke('reset-database')
+    const result = await window.ipcRenderer.invoke('reset-database')
     
     if (result.success) {
       ElMessage.success('数据库初始化成功')
@@ -629,8 +628,7 @@ const resetTableStructure = async () => {
       }
     )
     
-    const { ipcRenderer } = require('electron')
-    const result = await ipcRenderer.invoke('reset-table-structure')
+    const result = await window.ipcRenderer.invoke('reset-table-structure')
     
     if (result.success) {
       ElMessage.success('表结构重置成功')
@@ -664,13 +662,16 @@ const resetSystem = async () => {
   }
 }
 
-onMounted(() => {
-  // 从应用状态加载设置
-  const settings = appStore.settings
-  basicForm.storeName = settings.storeName
-  taxForm.defaultTaxRate = settings.taxRate * 100
-  receiptForm.autoPrint = settings.autoPrint
-  receiptForm.footer = settings.receiptFooter
+onMounted(async () => {
+  await appStore.loadSettings()
+  // 同步 settings 到表单
+  basicForm.storeName = appStore.settings.shopName || '便民小店'
+  basicForm.currency = appStore.settings.currency || 'CNY'
+  if (typeof appStore.settings.taxRate === 'number') {
+    taxForm.defaultTaxRate = appStore.settings.taxRate * 100
+  }
+  receiptForm.autoPrint = appStore.settings.autoPrint ?? false
+  receiptForm.footer = appStore.settings.receiptFooter || '谢谢惠顾，欢迎再次光临！'
 })
 </script>
 

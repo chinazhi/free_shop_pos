@@ -15,9 +15,10 @@ function createWindow() {
     minWidth: 1000,
     minHeight: 600,
     webPreferences: {
-      nodeIntegration: true,
-      contextIsolation: false,
-      enableRemoteModule: true
+      nodeIntegration: false,
+      contextIsolation: true,
+      enableRemoteModule: true,
+      preload: path.join(__dirname, '../preload.js')
     },
     icon: path.join(__dirname, '../../assets/icon.png'),
     show: false,
@@ -729,5 +730,87 @@ app.on('before-quit', async () => {
     }
   } catch (e) {
     console.error('关闭数据库时发生异常:', e)
+  }
+})
+
+// ==================== 统一销售事务相关 IPC 处理 ====================
+
+// 统一销售事务处理
+ipcMain.handle('process-sale', async (event, salePayload) => {
+  const { sale, items, stockUpdates, logs, memberPoints } = salePayload;
+  const db = database;
+  await db.run('BEGIN TRANSACTION');
+  try {
+    // 插入销售主表
+    const saleSql = `INSERT INTO sales (order_no, member_id, total_amount, discount_amount, tax_amount, final_amount, payment_method, payment_status, cashier, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, datetime('now', 'localtime'))`;
+    const saleParams = [sale.order_no, sale.member_id, sale.total_amount, sale.discount_amount, sale.tax_amount, sale.final_amount, sale.payment_method, sale.payment_status, sale.cashier];
+    const saleResult = await db.run(saleSql, saleParams);
+    const saleId = saleResult.lastID;
+    // 插入销售明细表
+    for (const item of items) {
+      const itemSql = `INSERT INTO sale_items (sale_id, product_id, quantity, unit_price, total_price, discount, created_at) VALUES (?, ?, ?, ?, ?, ?, datetime('now', 'localtime'))`;
+      const itemParams = [saleId, item.product_id, item.quantity, item.unit_price, item.total_price, item.discount];
+      await db.run(itemSql, itemParams);
+    }
+    // 批量扣减库存并写入库存日志
+    for (let i = 0; i < stockUpdates.length; i++) {
+      const { product_id, new_stock } = stockUpdates[i];
+      await db.run('UPDATE products SET stock = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?', [new_stock, product_id]);
+      const log = logs[i];
+      const logSql = `INSERT INTO inventory_logs (product_id, type, quantity, before_stock, after_stock, reason, operator) VALUES (?, ?, ?, ?, ?, ?, ?)`;
+      const logParams = [log.product_id, log.type, log.quantity, log.before_stock, log.after_stock, log.reason, log.operator];
+      await db.run(logSql, logParams);
+    }
+    // 会员积分处理
+    if (memberPoints && sale.member_id) {
+      // 更新会员积分
+      await db.run('UPDATE members SET points = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?', [memberPoints.after_points, sale.member_id]);
+      // 写入积分变动日志
+      const logSql = `INSERT INTO member_points_logs (member_id, type, change_amount, before_points, after_points, reason, operator) VALUES (?, ?, ?, ?, ?, ?, ?)`;
+      const logParams = [sale.member_id, memberPoints.type, memberPoints.change_amount, memberPoints.before_points, memberPoints.after_points, memberPoints.reason || '', memberPoints.operator || '系统'];
+      await db.run(logSql, logParams);
+    }
+    await db.run('COMMIT');
+    return { success: true, saleId };
+  } catch (error) {
+    await db.run('ROLLBACK');
+    console.error('销售事务失败:', error);
+    return { success: false, error: error.message };
+  }
+});
+
+// ==================== 系统设置相关 IPC 处理 ====================
+
+// 获取所有设置
+ipcMain.handle('get-settings', async (event) => {
+  try {
+    const sql = 'SELECT * FROM settings ORDER BY key'
+    return await database.query(sql)
+  } catch (error) {
+    console.error('获取设置失败:', error)
+    throw error
+  }
+})
+
+// 批量更新设置
+ipcMain.handle('update-settings', async (event, settingsArr) => {
+  try {
+    await database.run('BEGIN TRANSACTION')
+    try {
+      for (const setting of settingsArr) {
+        await database.run(
+          'UPDATE settings SET value = ?, updated_at = CURRENT_TIMESTAMP WHERE key = ?',
+          [setting.value, setting.key]
+        )
+      }
+      await database.run('COMMIT')
+      return { success: true }
+    } catch (error) {
+      await database.run('ROLLBACK')
+      throw error
+    }
+  } catch (error) {
+    console.error('批量更新设置失败:', error)
+    throw error
   }
 })

@@ -45,10 +45,17 @@ export const useCartStore = defineStore('cart', () => {
 
   // 优化后的 addItem，支持商品级折扣
   const addItem = (product, quantity = 1, itemDiscount = 0) => {
+    const productsStore = useProductsStore()
     const existingItem = items.value.find(item => item.product_id === product.id)
     const unitPrice = toNumber(product.price)
     const qty = toNumber(quantity, 1)
     const discountVal = toNumber(itemDiscount)
+    // 新增：加入购物车前校验库存
+    const productInStore = productsStore.getProductById(product.id)
+    const cartQty = existingItem ? toNumber(existingItem.quantity) : 0
+    if (!productInStore || toNumber(productInStore.stock) < cartQty + qty) {
+      throw new Error('商品库存不足')
+    }
     if (existingItem) {
       // 如果商品已存在，增加数量
       updateItemQuantity(existingItem.product_id, existingItem.quantity + qty)
@@ -200,33 +207,65 @@ export const useCartStore = defineStore('cart', () => {
         final_amount: totalAmount.value,
         payment_method: paymentMethod.value,
         payment_status: 'completed',
-        cashier: 'current_user', // 这里后续从用户状态获取
-        items: items.value.map(item => ({
-          product_id: item.product_id,
-          quantity: toNumber(item.quantity),
-          unit_price: toNumber(item.unit_price),
-          total_price: toNumber(item.total_price),
-          discount: toNumber(item.discount)
-        }))
+        cashier: 'current_user'
       }
-      // 这里后续会保存到数据库并更新库存
-      console.log('结账数据:', saleData)
-      // 统一依赖注入
-      const productsStore = useProductsStore()
-      // 批量校验库存并更新，防止并发问题
+      // 校验库存
+      const stockUpdates = []
+      const logs = []
+      const itemsArr = []
       for (const item of items.value) {
         const product = productsStore.getProductById(item.product_id)
         if (!product || toNumber(product.stock) < toNumber(item.quantity)) {
           throw new Error(`商品 ${item.name} 库存不足，当前库存：${product ? product.stock : 0}`)
         }
+        // 计算新库存
+        const newStock = toNumber(product.stock) - toNumber(item.quantity)
+        stockUpdates.push({ product_id: item.product_id, new_stock: newStock })
+        logs.push({
+          product_id: item.product_id,
+          type: 'out',
+          quantity: toNumber(item.quantity),
+          before_stock: toNumber(product.stock),
+          after_stock: newStock,
+          reason: '销售出库',
+          operator: 'current_user'
+        })
+        itemsArr.push({
+          product_id: item.product_id,
+          quantity: toNumber(item.quantity),
+          unit_price: toNumber(item.unit_price),
+          total_price: toNumber(item.total_price),
+          discount: toNumber(item.discount)
+        })
       }
-      for (const item of items.value) {
-        await productsStore.updateStock(item.product_id, toNumber(item.quantity), 'out')
+      let memberPoints = null
+      if (currentMember.value && currentMember.value.id) {
+        // 假设每消费1元积1分，可根据实际规则调整
+        const beforePoints = toNumber(currentMember.value.points)
+        const changeAmount = Math.floor(totalAmount.value)
+        const afterPoints = beforePoints + changeAmount
+        memberPoints = {
+          type: 'sale',
+          change_amount: changeAmount,
+          before_points: beforePoints,
+          after_points: afterPoints,
+          reason: '消费积分',
+          operator: 'current_user'
+        }
       }
+      const { ipcRenderer } = window.require('electron')
+      const result = await ipcRenderer.invoke('process-sale', {
+        sale: saleData,
+        items: itemsArr,
+        stockUpdates,
+        logs,
+        memberPoints
+      })
+      if (!result.success) throw new Error(result.error || '结账失败')
+      await ipcRenderer.invoke('print-receipt', { orderNo, saleData })
       
       // 清空购物车
       clearCart()
-      
       return {
         success: true,
         orderNo,

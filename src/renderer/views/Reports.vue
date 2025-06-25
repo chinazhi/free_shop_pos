@@ -286,105 +286,22 @@ const paymentChartRef = ref()
 const hourlyChartRef = ref()
 
 // 模拟数据
+const ipcRenderer = window.ipcRenderer
 const reportData = ref({
-  totalRevenue: 15680.50,
-  totalOrders: 156,
-  totalCustomers: 89,
-  averageOrderValue: 100.52,
+  totalRevenue: 0,
+  totalOrders: 0,
+  totalCustomers: 0,
+  averageOrderValue: 0,
   trends: {
-    revenue: { type: 'up', value: 12.5 },
-    orders: { type: 'up', value: 8.3 },
-    customers: { type: 'down', value: 2.1 },
-    avgOrder: { type: 'up', value: 5.7 }
+    revenue: { type: 'up', value: 0 },
+    orders: { type: 'up', value: 0 },
+    customers: { type: 'up', value: 0 },
+    avgOrder: { type: 'up', value: 0 }
   }
 })
-
-const salesDetails = ref([
-  {
-    date: '2024-01-25',
-    orders: 45,
-    revenue: 4580.30,
-    avg_order: 101.78,
-    customers: 38,
-    items_sold: 156,
-    refunds: 125.50
-  },
-  {
-    date: '2024-01-24',
-    orders: 38,
-    revenue: 3920.80,
-    avg_order: 103.18,
-    customers: 32,
-    items_sold: 128,
-    refunds: 89.20
-  },
-  {
-    date: '2024-01-23',
-    orders: 42,
-    revenue: 4256.90,
-    avg_order: 101.35,
-    customers: 35,
-    items_sold: 145,
-    refunds: 156.80
-  }
-])
-
-const productAnalysis = ref([
-  {
-    name: '可口可乐 330ml',
-    category: '饮料',
-    sold_quantity: 89,
-    revenue: 311.50,
-    profit: 133.65,
-    profit_margin: 0.429,
-    stock: 156
-  },
-  {
-    name: '薯片 大包装',
-    category: '零食',
-    sold_quantity: 45,
-    revenue: 576.00,
-    profit: 201.60,
-    profit_margin: 0.35,
-    stock: 78
-  },
-  {
-    name: '矿泉水 500ml',
-    category: '饮料',
-    sold_quantity: 156,
-    revenue: 312.00,
-    profit: 156.00,
-    profit_margin: 0.5,
-    stock: 234
-  }
-])
-
-const memberRanking = ref([
-  {
-    name: '张三',
-    level: 'gold',
-    orders: 12,
-    total_spent: 1256.80,
-    avg_order: 104.73,
-    last_visit: '2024-01-25T14:30:00Z'
-  },
-  {
-    name: '李四',
-    level: 'silver',
-    orders: 8,
-    total_spent: 890.50,
-    avg_order: 111.31,
-    last_visit: '2024-01-24T16:20:00Z'
-  },
-  {
-    name: '王五',
-    level: 'bronze',
-    orders: 6,
-    total_spent: 567.30,
-    avg_order: 94.55,
-    last_visit: '2024-01-23T11:45:00Z'
-  }
-])
+const salesDetails = ref([])
+const productAnalysis = ref([])
+const memberRanking = ref([])
 
 // 计算属性
 const totalRevenue = computed(() => reportData.value.totalRevenue)
@@ -398,18 +315,13 @@ const customersTrend = computed(() => reportData.value.trends.customers)
 const avgOrderTrend = computed(() => reportData.value.trends.avgOrder)
 
 const memberConsumptionRate = computed(() => {
-  // 模拟计算会员消费占比
-  return 68.5
+  return reportData.value.memberConsumptionRate || 0
 })
-
 const newMembers = computed(() => {
-  // 模拟新增会员数
-  return 15
+  return reportData.value.newMembers || 0
 })
-
 const activeMembers = computed(() => {
-  // 模拟活跃会员数
-  return 45
+  return reportData.value.activeMembers || 0
 })
 
 // 方法
@@ -420,9 +332,59 @@ const handleTimeRangeChange = () => {
   loadReportData()
 }
 
-const loadReportData = () => {
+const loadReportData = async () => {
+  // 时间范围处理
+  let startDate, endDate
+  const today = new Date()
+  if (timeRange.value === 'today') {
+    startDate = new Date(today.getFullYear(), today.getMonth(), today.getDate())
+    endDate = new Date(today.getFullYear(), today.getMonth(), today.getDate() + 1)
+  } else if (timeRange.value === 'week') {
+    const day = today.getDay() || 7
+    startDate = new Date(today.getFullYear(), today.getMonth(), today.getDate() - day + 1)
+    endDate = new Date(today.getFullYear(), today.getMonth(), today.getDate() + 1)
+  } else if (timeRange.value === 'month') {
+    startDate = new Date(today.getFullYear(), today.getMonth(), 1)
+    endDate = new Date(today.getFullYear(), today.getMonth() + 1, 1)
+  } else if (timeRange.value === 'custom' && customDateRange.value.length === 2) {
+    startDate = new Date(customDateRange.value[0])
+    endDate = new Date(customDateRange.value[1])
+    endDate.setDate(endDate.getDate() + 1)
+  } else {
+    startDate = new Date(today.getFullYear(), today.getMonth(), today.getDate())
+    endDate = new Date(today.getFullYear(), today.getMonth(), today.getDate() + 1)
+  }
+  const start = startDate.toISOString().slice(0, 10)
+  const end = endDate.toISOString().slice(0, 10)
+  // 1. 核心指标
+  const coreSql = `SELECT COUNT(*) as totalOrders, IFNULL(SUM(final_amount),0) as totalRevenue, COUNT(DISTINCT member_id) as totalCustomers, IFNULL(AVG(final_amount),0) as averageOrderValue FROM sales WHERE created_at >= ? AND created_at < ? AND payment_status != 'refunded'`
+  const core = await ipcRenderer.invoke('db-get', coreSql, [start, end])
+  reportData.value.totalRevenue = core.totalRevenue
+  reportData.value.totalOrders = core.totalOrders
+  reportData.value.totalCustomers = core.totalCustomers
+  reportData.value.averageOrderValue = core.averageOrderValue
+  // 2. 销售明细（日维度）
+  const detailSql = `SELECT substr(created_at,1,10) as date, COUNT(*) as orders, IFNULL(SUM(final_amount),0) as revenue, IFNULL(AVG(final_amount),0) as avg_order, COUNT(DISTINCT member_id) as customers, (SELECT IFNULL(SUM(quantity),0) FROM sale_items si WHERE si.sale_id = s.id) as items_sold, IFNULL(SUM(CASE WHEN payment_status='refunded' THEN final_amount ELSE 0 END),0) as refunds FROM sales s WHERE created_at >= ? AND created_at < ? GROUP BY date ORDER BY date DESC`
+  salesDetails.value = await ipcRenderer.invoke('db-query', detailSql, [start, end])
+  // 3. 商品分析
+  const productSql = `SELECT p.name, p.category, IFNULL(SUM(si.quantity),0) as sold_quantity, IFNULL(SUM(si.total_price),0) as revenue, IFNULL(SUM((si.unit_price-p.cost)*si.quantity),0) as profit, CASE WHEN SUM(si.total_price)>0 THEN SUM((si.unit_price-p.cost)*si.quantity)/SUM(si.total_price) ELSE 0 END as profit_margin, p.stock FROM sale_items si JOIN products p ON si.product_id=p.id JOIN sales s ON si.sale_id=s.id WHERE s.created_at >= ? AND s.created_at < ? GROUP BY si.product_id ORDER BY sold_quantity DESC`
+  productAnalysis.value = await ipcRenderer.invoke('db-query', productSql, [start, end])
+  // 4. 会员分析
+  const memberSql = `SELECT m.name, m.level, COUNT(s.id) as orders, IFNULL(SUM(s.final_amount),0) as total_spent, IFNULL(AVG(s.final_amount),0) as avg_order, MAX(s.created_at) as last_visit FROM sales s JOIN members m ON s.member_id=m.id WHERE s.created_at >= ? AND s.created_at < ? GROUP BY m.id ORDER BY total_spent DESC`
+  memberRanking.value = await ipcRenderer.invoke('db-query', memberSql, [start, end])
+  // 会员消费占比
+  const memberRateSql = `SELECT IFNULL(SUM(final_amount),0) as memberAmount FROM sales WHERE member_id IS NOT NULL AND created_at >= ? AND created_at < ? AND payment_status != 'refunded'`
+  const memberAmountRow = await ipcRenderer.invoke('db-get', memberRateSql, [start, end])
+  reportData.value.memberConsumptionRate = reportData.value.totalRevenue > 0 ? ((memberAmountRow.memberAmount / reportData.value.totalRevenue) * 100).toFixed(1) : 0
+  // 新增会员
+  const newMemberSql = `SELECT COUNT(*) as newMembers FROM members WHERE created_at >= ? AND created_at < ?`
+  const newMemberRow = await ipcRenderer.invoke('db-get', newMemberSql, [start, end])
+  reportData.value.newMembers = newMemberRow.newMembers
+  // 活跃会员
+  const activeMemberSql = `SELECT COUNT(DISTINCT member_id) as activeMembers FROM sales WHERE created_at >= ? AND created_at < ? AND member_id IS NOT NULL`
+  const activeMemberRow = await ipcRenderer.invoke('db-get', activeMemberSql, [start, end])
+  reportData.value.activeMembers = activeMemberRow.activeMembers
   ElMessage.success('数据加载成功')
-  // 这里应该根据时间范围加载实际数据
   nextTick(() => {
     initCharts()
   })
