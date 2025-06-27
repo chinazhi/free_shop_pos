@@ -224,7 +224,7 @@ ipcMain.handle('get-products', async (event) => {
     console.log('[get-products] dbPath:', database.dbPath)
     const sql = 'SELECT * FROM products ORDER BY name'
     const result = await database.query(sql)
-    console.log('[get-products] result:', result)
+    // console.log('[get-products] result:', result)
     return result
   } catch (error) {
     console.error('获取商品失败:', error)
@@ -711,16 +711,6 @@ ipcMain.handle('delete-category', async (event, id) => {
   }
 })
 
-// 重置表结构
-ipcMain.handle('reset-table-structure', async (event) => {
-  try {
-    return await database.resetTableStructure()
-  } catch (error) {
-    console.error('重置表结构失败:', error)
-    throw error
-  }
-})
-
 // 应用退出前清理
 app.on('before-quit', async () => {
   try {
@@ -745,7 +735,7 @@ ipcMain.handle('process-sale', async (event, salePayload) => {
     const saleSql = `INSERT INTO sales (order_no, member_id, total_amount, discount_amount, tax_amount, final_amount, payment_method, payment_status, cashier, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, datetime('now', 'localtime'))`;
     const saleParams = [sale.order_no, sale.member_id, sale.total_amount, sale.discount_amount, sale.tax_amount, sale.final_amount, sale.payment_method, sale.payment_status, sale.cashier];
     const saleResult = await db.run(saleSql, saleParams);
-    const saleId = saleResult.lastID;
+    const saleId = saleResult.id;
     // 插入销售明细表
     for (const item of items) {
       const itemSql = `INSERT INTO sale_items (sale_id, product_id, quantity, unit_price, total_price, discount, created_at) VALUES (?, ?, ?, ?, ?, ?, datetime('now', 'localtime'))`;
@@ -784,7 +774,7 @@ ipcMain.handle('process-sale', async (event, salePayload) => {
 // 获取所有设置
 ipcMain.handle('get-settings', async (event) => {
   try {
-    const sql = 'SELECT * FROM settings ORDER BY key'
+    const sql = 'SELECT key, value FROM settings ORDER BY key'
     return await database.query(sql)
   } catch (error) {
     console.error('获取设置失败:', error)
@@ -798,12 +788,14 @@ ipcMain.handle('update-settings', async (event, settingsArr) => {
     await database.run('BEGIN TRANSACTION')
     try {
       for (const setting of settingsArr) {
+        // 使用 INSERT OR REPLACE 确保新设置能被正确保存
         await database.run(
-          'UPDATE settings SET value = ?, updated_at = CURRENT_TIMESTAMP WHERE key = ?',
-          [setting.value, setting.key]
+          'INSERT OR REPLACE INTO settings (key, value, updated_at) VALUES (?, ?, CURRENT_TIMESTAMP)',
+          [setting.key, setting.value]
         )
       }
       await database.run('COMMIT')
+      console.log('设置保存成功:', settingsArr.length, '项')
       return { success: true }
     } catch (error) {
       await database.run('ROLLBACK')

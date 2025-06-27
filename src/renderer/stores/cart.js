@@ -188,6 +188,7 @@ export const useCartStore = defineStore('cart', () => {
 
   // 优化后的 checkout，异常处理和依赖注入优化
   const checkout = async () => {
+    const productsStore = useProductsStore()
     const errors = validateCart()
     if (errors.length > 0) {
       throw new Error(errors.join('\n'))
@@ -253,8 +254,7 @@ export const useCartStore = defineStore('cart', () => {
           operator: 'current_user'
         }
       }
-      const { ipcRenderer } = window.require('electron')
-      const result = await ipcRenderer.invoke('process-sale', {
+      const result = await window.ipcRenderer.invoke('process-sale', {
         sale: saleData,
         items: itemsArr,
         stockUpdates,
@@ -262,15 +262,26 @@ export const useCartStore = defineStore('cart', () => {
         memberPoints
       })
       if (!result.success) throw new Error(result.error || '结账失败')
-      await ipcRenderer.invoke('print-receipt', { orderNo, saleData })
+      await window.ipcRenderer.invoke('print-receipt', { orderNo, saleData })
+      
+      // 保存订单信息用于返回
+      const orderInfo = {
+        success: true,
+        orderNo,
+        saleData,
+        items: [...items.value],
+        subtotal: subtotal.value,
+        discountAmount: discountAmount.value,
+        totalAmount: totalAmount.value,
+        paymentMethod: paymentMethod.value,
+        receivedAmount: receivedAmount.value,
+        changeAmount: changeAmount.value
+      }
       
       // 清空购物车
       clearCart()
-      return {
-        success: true,
-        orderNo,
-        saleData
-      }
+      
+      return orderInfo
     } catch (error) {
       // 统一异常处理
       console.error('结账失败:', error)

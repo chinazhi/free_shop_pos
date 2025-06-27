@@ -402,13 +402,13 @@ const handleCheckout = async () => {
     
     // 保存订单信息用于显示小票
     lastOrderNo.value = result.orderNo
-    lastOrderItems.value = [...cartStore.items]
-    lastOrderSubtotal.value = cartStore.subtotal
-    lastOrderDiscount.value = cartStore.discountAmount
-    lastOrderTotal.value = cartStore.totalAmount
-    lastPaymentMethod.value = cartStore.paymentMethod
-    lastReceivedAmount.value = cartStore.receivedAmount
-    lastChangeAmount.value = cartStore.changeAmount
+    lastOrderItems.value = result.items
+    lastOrderSubtotal.value = result.subtotal
+    lastOrderDiscount.value = result.discountAmount
+    lastOrderTotal.value = result.totalAmount
+    lastPaymentMethod.value = result.paymentMethod
+    lastReceivedAmount.value = result.receivedAmount
+    lastChangeAmount.value = result.changeAmount
     
     showReceiptDialog.value = true
     

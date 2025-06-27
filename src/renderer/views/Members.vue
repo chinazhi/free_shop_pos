@@ -127,7 +127,7 @@
         </el-table-column>
         <el-table-column prop="total_spent" label="累计消费" width="120" align="right">
           <template #default="{ row }">
-            ¥{{ row.total_spent.toFixed(2) }}
+            ¥{{ (row.total_spent || 0).toFixed(2) }}
           </template>
         </el-table-column>
         <el-table-column prop="created_at" label="注册时间" width="180">
@@ -198,6 +198,32 @@
             style="width: 100%"
           />
         </el-form-item>
+        <el-form-item label="生日">
+          <el-date-picker
+            v-model="memberForm.birthday"
+            type="date"
+            placeholder="选择生日"
+            style="width: 100%"
+            format="YYYY-MM-DD"
+            value-format="YYYY-MM-DD"
+          />
+        </el-form-item>
+        <el-form-item label="地址">
+          <el-input
+            v-model="memberForm.address"
+            placeholder="请输入地址"
+            type="textarea"
+            :rows="2"
+          />
+        </el-form-item>
+        <el-form-item label="备注">
+          <el-input
+            v-model="memberForm.notes"
+            placeholder="备注信息"
+            type="textarea"
+            :rows="3"
+          />
+        </el-form-item>
       </el-form>
       <template #footer>
         <el-button @click="showAddDialog = false">取消</el-button>
@@ -242,6 +268,18 @@
                 <label>注册时间：</label>
                 <span>{{ formatDate(selectedMember.created_at) }}</span>
               </div>
+              <div class="detail-item">
+                <label>生日：</label>
+                <span>{{ selectedMember.birthday || '未设置' }}</span>
+              </div>
+              <div class="detail-item">
+                <label>地址：</label>
+                <span>{{ selectedMember.address || '未设置' }}</span>
+              </div>
+              <div class="detail-item">
+                <label>备注：</label>
+                <span>{{ selectedMember.notes || '无' }}</span>
+              </div>
             </div>
           </el-col>
           <el-col :span="12">
@@ -253,7 +291,7 @@
               </div>
               <div class="detail-item">
                 <label>累计消费：</label>
-                <span class="highlight">¥{{ selectedMember.total_spent.toFixed(2) }}</span>
+                <span class="highlight">¥{{ (selectedMember.total_spent || 0).toFixed(2) }}</span>
               </div>
               <div class="detail-item">
                 <label>消费次数：</label>
@@ -261,7 +299,7 @@
               </div>
               <div class="detail-item">
                 <label>平均消费：</label>
-                <span>¥{{ averageOrderAmount.toFixed(2) }}</span>
+                <span>¥{{ (averageOrderAmount || 0).toFixed(2) }}</span>
               </div>
               <div class="detail-item">
                 <label>最后消费：</label>
@@ -278,7 +316,7 @@
             <el-table-column prop="order_no" label="订单号" width="150" />
             <el-table-column prop="total_amount" label="消费金额" width="100" align="right">
               <template #default="{ row }">
-                ¥{{ row.total_amount.toFixed(2) }}
+                ¥{{ (row.total_amount || 0).toFixed(2) }}
               </template>
             </el-table-column>
             <el-table-column prop="points_earned" label="获得积分" width="100" align="center" />
@@ -436,7 +474,17 @@ const formatDate = (dateString) => {
 
 const editMember = (member) => {
   editingMember.value = member
-  Object.assign(memberForm, member)
+  // 只复制需要的字段，避免不可克隆的对象
+  Object.assign(memberForm, {
+    name: member.name || '',
+    phone: member.phone || '',
+    email: member.email || '',
+    level: member.level || 'bronze',
+    points: member.points || 0,
+    birthday: member.birthday || '',
+    address: member.address || '',
+    notes: member.notes || ''
+  })
   showAddDialog.value = true
 }
 
@@ -455,7 +503,10 @@ const resetForm = () => {
     phone: '',
     email: '',
     level: 'bronze',
-    points: 0
+    points: 0,
+    birthday: '',
+    address: '',
+    notes: ''
   })
   memberFormRef.value?.resetFields()
 }
@@ -464,18 +515,33 @@ const saveMember = async () => {
   try {
     await memberFormRef.value.validate()
     
+    // 创建普通对象副本，避免传递响应式对象
+    const memberData = {
+      name: (memberForm.name || '').trim(),
+      phone: (memberForm.phone || '').trim(),
+      email: (memberForm.email || '').trim(),
+      level: memberForm.level || 'bronze',
+      points: Number(memberForm.points) || 0,
+      birthday: memberForm.birthday || '',
+      address: (memberForm.address || '').trim(),
+      notes: (memberForm.notes || '').trim()
+    }
+    
     if (editingMember.value) {
       // 更新会员
-      await membersStore.updateMember(editingMember.value.id, memberForm)
+      await membersStore.updateMember(editingMember.value.id, memberData)
       ElMessage.success('会员信息更新成功')
     } else {
       // 添加会员
-      await membersStore.addMember(memberForm)
+      await membersStore.addMember(memberData)
       ElMessage.success('会员添加成功')
     }
     
     showAddDialog.value = false
     resetForm()
+    
+    // 刷新会员列表数据
+    await membersStore.loadMembers()
   } catch (error) {
     console.error('保存会员失败:', error)
     if (error !== false) {

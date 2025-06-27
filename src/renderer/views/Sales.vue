@@ -176,12 +176,20 @@
               打印
             </el-button>
             <el-button 
-              v-if="row.status === 'completed'"
+              v-if="row.status === 'completed' && (!row.refund_amount || row.refund_amount === 0)"
               type="warning" 
               size="small" 
               @click="handleRefundOrder(row)"
             >
               退款
+            </el-button>
+            <el-button 
+              v-if="row.status === 'partial_refund'"
+              type="warning" 
+              size="small" 
+              @click="handleRefundOrder(row)"
+            >
+              继续退款
             </el-button>
           </template>
         </el-table-column>
@@ -300,6 +308,18 @@
               <label>订单总计：</label>
               <span>¥{{ selectedOrder.total_amount.toFixed(2) }}</span>
             </div>
+            <div v-if="selectedOrder.refund_amount && selectedOrder.refund_amount > 0" class="summary-item">
+              <label>退款金额：</label>
+              <span class="discount-amount">-¥{{ selectedOrder.refund_amount.toFixed(2) }}</span>
+            </div>
+            <div v-if="selectedOrder.refund_reason" class="summary-item">
+              <label>退款原因：</label>
+              <span>{{ selectedOrder.refund_reason }}</span>
+            </div>
+            <div v-if="selectedOrder.refund_time" class="summary-item">
+              <label>退款时间：</label>
+              <span>{{ formatDateTime(selectedOrder.refund_time) }}</span>
+            </div>
           </div>
         </div>
       </div>
@@ -333,9 +353,15 @@
           <el-form-item label="订单金额">
             <el-text type="primary">¥{{ refundOrder.total_amount.toFixed(2) }}</el-text>
           </el-form-item>
+          <el-form-item v-if="refundOrder.refund_amount && refundOrder.refund_amount > 0" label="已退款金额">
+            <el-text type="warning">¥{{ refundOrder.refund_amount.toFixed(2) }}</el-text>
+          </el-form-item>
+          <el-form-item v-if="refundOrder.refund_amount && refundOrder.refund_amount > 0" label="剩余金额">
+            <el-text type="info">¥{{ (refundOrder.total_amount - refundOrder.refund_amount).toFixed(2) }}</el-text>
+          </el-form-item>
           <el-form-item label="退款类型">
             <el-radio-group v-model="refundType">
-              <el-radio label="full">全额退款</el-radio>
+              <el-radio label="full" :disabled="refundOrder.status === 'partial_refund'">全额退款</el-radio>
               <el-radio label="partial">部分退款</el-radio>
             </el-radio-group>
           </el-form-item>
@@ -343,10 +369,13 @@
             <el-input-number
               v-model="refundAmount"
               :min="0.01"
-              :max="refundOrder.total_amount"
+              :max="refundOrder.total_amount - (refundOrder.refund_amount || 0)"
               :precision="2"
               style="width: 100%"
             />
+            <div style="font-size: 12px; color: #999; margin-top: 4px;">
+              最大可退款：¥{{ (refundOrder.total_amount - (refundOrder.refund_amount || 0)).toFixed(2) }}
+            </div>
           </el-form-item>
           <el-form-item label="退款原因">
             <el-input
@@ -394,7 +423,7 @@ const orderItems = ref([])
 
 async function loadSales() {
   loading.value = true
-  let sql = `SELECT s.id, s.order_no, s.cashier, m.name as member_name, s.total_amount, s.discount_amount, s.tax_amount, s.final_amount, s.payment_method, s.payment_status as status, s.created_at,
+  let sql = `SELECT s.id, s.order_no, s.cashier, m.name as member_name, s.total_amount, s.discount_amount, s.tax_amount, s.final_amount, s.payment_method, s.payment_status as status, s.refund_amount, s.refund_reason, s.refund_time, s.created_at,
     (SELECT COUNT(*) FROM sale_items si WHERE si.sale_id = s.id) as items_count,
     s.final_amount as subtotal, 0 as received_amount, 0 as change_amount
     FROM sales s LEFT JOIN members m ON s.member_id = m.id ORDER BY s.created_at DESC`;
@@ -557,8 +586,18 @@ const printReceipt = (order) => {
 
 const handleRefundOrder = (order) => {
   refundOrder.value = order
-  refundType.value = 'full'
-  refundAmount.value = order.total_amount
+  const currentRefundAmount = order.refund_amount || 0
+  const remainingAmount = order.total_amount - currentRefundAmount
+  
+  // 如果是部分退款状态，默认选择部分退款
+  if (order.status === 'partial_refund') {
+    refundType.value = 'partial'
+    refundAmount.value = remainingAmount
+  } else {
+    refundType.value = 'full'
+    refundAmount.value = order.total_amount
+  }
+  
   refundReason.value = ''
   showRefundDialog.value = true
 }
@@ -566,6 +605,20 @@ const handleRefundOrder = (order) => {
 const confirmRefund = async () => {
   if (!refundReason.value.trim()) {
     ElMessage.warning('请输入退款原因')
+    return
+  }
+  
+  // 验证退款金额
+  const currentRefundAmount = refundOrder.value.refund_amount || 0
+  const remainingAmount = refundOrder.value.total_amount - currentRefundAmount
+  
+  if (refundType.value === 'partial' && refundAmount.value > remainingAmount) {
+    ElMessage.warning(`退款金额不能超过剩余金额 ¥${remainingAmount.toFixed(2)}`)
+    return
+  }
+  
+  if (refundType.value === 'partial' && refundAmount.value <= 0) {
+    ElMessage.warning('退款金额必须大于0')
     return
   }
   
@@ -580,19 +633,34 @@ const confirmRefund = async () => {
       }
     )
     
-    // 更新订单状态
+    // 计算新的退款金额（累加之前的退款金额）
+    const currentRefundAmount = refundOrder.value.refund_amount || 0
+    const newRefundAmount = refundType.value === 'full' ? refundOrder.value.total_amount : currentRefundAmount + refundAmount.value
+    
+    // 确定新状态
+    const newStatus = newRefundAmount >= refundOrder.value.total_amount ? 'refunded' : 'partial_refund'
+    
+    // 更新数据库中的订单状态
+    const updateSql = 'UPDATE sales SET payment_status = ?, refund_amount = ?, refund_reason = ?, refund_time = datetime("now", "localtime") WHERE id = ?'
+    
+    await ipcRenderer.invoke('db-run', updateSql, [newStatus, newRefundAmount, refundReason.value, refundOrder.value.id])
+    
+    // 更新前端显示的订单状态
     const index = sales.value.findIndex(s => s.id === refundOrder.value.id)
     if (index !== -1) {
-      sales.value[index].status = refundType.value === 'full' ? 'refunded' : 'partial_refund'
-      if (refundType.value === 'partial') {
-        sales.value[index].refund_amount = refundAmount.value
-      }
+      sales.value[index].status = newStatus
+      sales.value[index].refund_amount = newRefundAmount
+      sales.value[index].refund_reason = refundReason.value
+      sales.value[index].refund_time = new Date().toISOString().replace('T', ' ').substring(0, 19)
     }
     
     ElMessage.success('退款处理成功')
     showRefundDialog.value = false
-  } catch {
-    // 用户取消
+  } catch (error) {
+    if (error !== 'cancel') {
+      console.error('退款处理失败:', error)
+      ElMessage.error('退款处理失败，请重试')
+    }
   }
 }
 
@@ -600,12 +668,14 @@ const handleExport = () => {
   ElMessage.info('导出功能开发中...')
 }
 
-const refreshData = () => {
-  loading.value = true
-  setTimeout(() => {
-    loading.value = false
+const refreshData = async () => {
+  try {
+    await loadSales()
     ElMessage.success('数据刷新成功')
-  }, 1000)
+  } catch (error) {
+    console.error('刷新数据失败:', error)
+    ElMessage.error('数据刷新失败，请重试')
+  }
 }
 
 onMounted(() => {

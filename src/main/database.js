@@ -62,6 +62,9 @@ class Database {
           points INTEGER DEFAULT 0,
           total_spent REAL DEFAULT 0,
           level TEXT DEFAULT 'bronze',
+          birthday TEXT,
+          address TEXT,
+          notes TEXT,
           is_active BOOLEAN DEFAULT 1,
           created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
           updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
@@ -78,6 +81,9 @@ class Database {
           final_amount REAL NOT NULL,
           payment_method TEXT NOT NULL,
           payment_status TEXT DEFAULT 'completed',
+          refund_amount REAL DEFAULT 0,
+          refund_reason TEXT,
+          refund_time DATETIME,
           cashier TEXT,
           notes TEXT,
           created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
@@ -128,8 +134,7 @@ class Database {
         
         // 系统设置表
         `CREATE TABLE IF NOT EXISTS settings (
-          id INTEGER PRIMARY KEY AUTOINCREMENT,
-          key TEXT UNIQUE NOT NULL,
+          key TEXT PRIMARY KEY NOT NULL,
           value TEXT,
           description TEXT,
           updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
@@ -180,7 +185,29 @@ class Database {
       ['tax_rate', '0', '税率(%)'],
       ['currency', 'CNY', '货币单位'],
       ['receipt_footer', '谢谢惠顾，欢迎再次光临！', '小票底部信息'],
-      ['auto_print', 'false', '自动打印小票']
+      ['auto_print', 'false', '自动打印小票'],
+      ['business_hours', '["09:00","22:00"]', '营业时间'],
+      ['store_address', '', '门店地址'],
+      ['store_phone', '', '联系电话'],
+      ['store_description', '', '门店描述'],
+      ['decimal_places', '2', '小数位数'],
+      ['enable_tax', 'false', '启用税务'],
+      ['tax_number', '', '税务编号'],
+      ['tax_name', '增值税', '税务名称'],
+      ['paper_width', '80', '小票纸宽'],
+      ['receipt_header', '', '小票页眉'],
+      ['show_barcode', 'true', '显示商品条码'],
+      ['show_cashier', 'true', '显示收银员'],
+      ['enable_points', 'true', '启用积分'],
+      ['points_expiry', '365', '积分有效期'],
+      ['points_value', '0.01', '积分抵扣'],
+      ['member_levels', '[{"name":"青铜会员","discount":0.95,"pointsRate":1,"minSpent":0},{"name":"白银会员","discount":0.9,"pointsRate":1.5,"minSpent":1000},{"name":"黄金会员","discount":0.85,"pointsRate":2,"minSpent":5000}]', '会员等级'],
+      ['theme_color', '#409eff', '主题色彩'],
+      ['language', 'zh-CN', '语言'],
+      ['time_format', '24', '时间格式'],
+      ['auto_backup', 'true', '自动备份'],
+      ['backup_frequency', 'daily', '备份频率'],
+      ['data_retention', '365', '数据保留天数']
     ];
     const runAsync = (stmt, params) => new Promise((res, rej) => stmt.run(...params, err => err ? rej(err) : res()));
     // 分类
@@ -196,17 +223,19 @@ class Database {
     for (const row of defaultProducts) await runAsync(productStmt, row);
     productStmt.finalize();
     // 会员
-    const memberStmt = this.db.prepare('INSERT OR IGNORE INTO members (member_no, name, phone, email, points, total_spent, level) VALUES (?, ?, ?, ?, ?, ?, ?)');
+    const memberStmt = this.db.prepare('INSERT OR IGNORE INTO members (member_no, name, phone, email, points, total_spent, level, birthday, address, notes) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)');
     for (const row of defaultMembers) await runAsync(memberStmt, row);
     memberStmt.finalize();
     // 初始化默认销售订单和明细
     const defaultSales = [
-      // id自动递增，order_no, member_id, total_amount, discount_amount, tax_amount, final_amount, payment_method, payment_status, cashier, notes, created_at
-      ['20240125001', 2, 156.80, 15.68, 14.11, 155.23, 'wechat', 'completed', '张三', '', '2024-01-25T14:30:00Z'],
-      ['20240125002', null, 89.50, 0, 8.05, 97.55, 'cash', 'completed', '王五', '', '2024-01-25T15:45:00Z'],
-      ['20240125003', null, 234.60, 23.46, 19.00, 230.14, 'alipay', 'refunded', '张三', '', '2024-01-25T16:20:00Z']
+      // 添加退款相关字段：refund_amount, refund_reason, refund_time
+      ['20240125001', 2, 156.80, 15.68, 14.11, 155.23, 'wechat', 'completed', 0, null, null, '张三', '', '2024-01-25T14:30:00Z'],
+      ['20240125002', null, 89.50, 0, 8.05, 97.55, 'cash', 'completed', 0, null, null, '王五', '', '2024-01-25T15:45:00Z'],
+      ['20240125003', null, 234.60, 23.46, 19.00, 230.14, 'alipay', 'refunded', 230.14, '商品质量问题', '2024-01-25T17:30:00Z', '张三', '', '2024-01-25T16:20:00Z']
     ];
-    const saleStmt = this.db.prepare('INSERT OR IGNORE INTO sales (order_no, member_id, total_amount, discount_amount, tax_amount, final_amount, payment_method, payment_status, cashier, notes, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)');
+    
+    // 更新对应的 SQL 语句
+    const saleStmt = this.db.prepare('INSERT OR IGNORE INTO sales (order_no, member_id, total_amount, discount_amount, tax_amount, final_amount, payment_method, payment_status, refund_amount, refund_reason, refund_time, cashier, notes, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)');
     for (const row of defaultSales) await runAsync(saleStmt, row);
     saleStmt.finalize();
     const defaultSaleItems = [
@@ -264,7 +293,7 @@ class Database {
   async resetDatabase() {
     try {
       // 删除所有表的数据（保留表结构）
-      const tables = ['inventory_logs', 'sale_items', 'sales', 'products', 'members', 'categories']
+      const tables = ['inventory_logs', 'sale_items', 'sales', 'products', 'members', 'categories', 'settings', 'member_points_logs']
       
       for (const table of tables) {
         await this.run(`DELETE FROM ${table}`)
@@ -281,40 +310,6 @@ class Database {
       console.error('数据库重置失败:', error)
       throw error
     }
-  }
-
-  // 重置表结构（删除并重新创建表）
-  resetTableStructure() {
-    return new Promise((resolve, reject) => {
-      try {
-        const tables = ['products', 'members', 'categories', 'sales', 'sale_items', 'inventory_logs', 'member_points_logs', 'settings']
-        // 删除所有表
-        const dropPromises = tables.map(table => {
-          return new Promise((res, rej) => {
-            this.db.run(`DROP TABLE IF EXISTS ${table}`, (err) => {
-              if (err) {
-                console.error(`删除表 ${table} 失败:`, err)
-                rej(err)
-              } else {
-                console.log(`成功删除表: ${table}`)
-                res()
-              }
-            })
-          })
-        })
-        Promise.all(dropPromises).then(() => {
-          console.log('所有表已删除，开始重新创建表结构')
-          // 重新创建表
-          this.createTables().then(() => {
-            console.log('表结构重置完成')
-            resolve({ success: true, message: '表结构重置成功' })
-          }).catch(reject)
-        }).catch(reject)
-      } catch (error) {
-        console.error('重置表结构失败:', error)
-        reject(error)
-      }
-    })
   }
 
   // 关闭数据库连接

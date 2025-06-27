@@ -546,7 +546,10 @@ const handleStatusChange = async (product) => {
 
 const editProduct = (product) => {
   editingProduct.value = product
-  Object.assign(productForm, product)
+  Object.assign(productForm, {
+    ...product,
+    is_active: product.is_active === 1  // 转换为布尔值
+  })
   showAddDialog.value = true
 }
 
@@ -599,11 +602,16 @@ const saveProduct = async () => {
   try {
     await productFormRef.value.validate()
     
+    const productData = {
+      ...productForm,
+      is_active: productForm.is_active ? 1 : 0  // 转换为数值
+    }
+    
     if (editingProduct.value) {
-      await productsStore.updateProduct(editingProduct.value.id, JSON.parse(JSON.stringify(productForm)))
+      await productsStore.updateProduct(editingProduct.value.id, productData)
       ElMessage.success('商品更新成功')
     } else {
-      await productsStore.addProduct(JSON.parse(JSON.stringify(productForm)))
+      await productsStore.addProduct(productData)
       ElMessage.success('商品添加成功')
     }
     

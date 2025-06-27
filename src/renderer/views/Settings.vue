@@ -129,7 +129,7 @@
               </el-form-item>
               <el-form-item label="小票页眉">
                 <el-input
-                  v-model="receiptForm.header"
+                  v-model="receiptForm.receiptHeader"
                   type="textarea"
                   :rows="3"
                   placeholder="请输入小票页眉内容"
@@ -137,7 +137,7 @@
               </el-form-item>
               <el-form-item label="小票页脚">
                 <el-input
-                  v-model="receiptForm.footer"
+                  v-model="receiptForm.receiptFooter"
                   type="textarea"
                   :rows="3"
                   placeholder="请输入小票页脚内容"
@@ -157,7 +157,7 @@
             <div class="receipt-preview">
               <div class="receipt-paper">
                 <div class="receipt-header">
-                  {{ receiptForm.header || basicForm.storeName }}
+                  {{ receiptForm.receiptHeader || basicForm.storeName }}
                 </div>
                 <div class="receipt-divider">================================</div>
                 <div class="receipt-item">
@@ -181,7 +181,7 @@
                 </div>
                 <div class="receipt-divider">================================</div>
                 <div class="receipt-footer">
-                  {{ receiptForm.footer || '谢谢惠顾，欢迎再次光临！' }}
+                  {{ receiptForm.receiptFooter || '谢谢惠顾，欢迎再次光临！' }}
                 </div>
                 <div v-if="receiptForm.showCashier" class="receipt-cashier">
                   收银员: 张三
@@ -240,23 +240,25 @@
               <el-form-item label="启用积分">
                 <el-switch v-model="memberForm.enablePoints" />
               </el-form-item>
-              <el-form-item v-if="memberForm.enablePoints" label="积分比例">
-                <el-input-number
-                  v-model="memberForm.pointsRatio"
-                  :min="0"
-                  :precision="2"
-                  style="width: 200px"
-                />
-                <span style="margin-left: 10px;">积分/元</span>
-              </el-form-item>
               <el-form-item v-if="memberForm.enablePoints" label="积分抵扣">
                 <el-input-number
                   v-model="memberForm.pointsValue"
                   :min="0"
                   :precision="4"
+                  :step="0.01"
+                  :value="0.01"
                   style="width: 200px"
                 />
                 <span style="margin-left: 10px;">元/积分</span>
+              </el-form-item>
+              <el-form-item v-if="memberForm.enablePoints" label="积分有效期">
+                <el-input-number
+                  v-model="memberForm.pointsExpiry"
+                  :min="1"
+                  :precision="0"
+                  style="width: 200px"
+                />
+                <span style="margin-left: 10px;">天</span>
               </el-form-item>
             </el-form>
           </div>
@@ -330,14 +332,6 @@
               <el-button type="info" @click="initializeDatabase">
                 <el-icon><Refresh /></el-icon>
                 初始化数据库
-              </el-button>
-              <el-button type="warning" @click="resetTableStructure">
-                <el-icon><Tools /></el-icon>
-                重置表结构
-              </el-button>
-              <el-button type="danger" @click="resetSystem">
-                <el-icon><RefreshLeft /></el-icon>
-                重置系统
               </el-button>
             </div>
           </div>
@@ -417,94 +411,37 @@ const basicFormRef = ref()
 const levelFormRef = ref()
 
 // 基本设置表单
-const basicForm = reactive({
-  storeName: '便民小店',
-  storeAddress: '',
-  storePhone: '',
-  businessHours: ['09:00', '22:00'],
-  storeDescription: '',
-  currency: 'CNY',
-  decimalPlaces: 2
-})
-
+const basicForm = reactive({})
 // 税务设置表单
-const taxForm = reactive({
-  enableTax: true,
-  defaultTaxRate: 9.0,
-  taxNumber: '',
-  taxName: '增值税'
-})
-
+const taxForm = reactive({})
 // 小票设置表单
-const receiptForm = reactive({
-  autoPrint: false,
-  paperWidth: '80',
-  header: '',
-  footer: '谢谢惠顾，欢迎再次光临！',
-  showBarcode: true,
-  showCashier: true
-})
-
+const receiptForm = reactive({})
 // 会员设置表单
-const memberForm = reactive({
-  enablePoints: true,
-  pointsRatio: 1.0,
-  pointsValue: 0.01
-})
-
+const memberForm = reactive({})
 // 系统设置表单
-const systemForm = reactive({
-  themeColor: '#409eff',
-  language: 'zh-CN',
-  timeFormat: '24',
-  autoBackup: true,
-  backupFrequency: 'daily',
-  dataRetention: 365
-})
-
+const systemForm = reactive({})
 // 会员等级数据
-const memberLevels = ref([
-  {
-    name: '青铜会员',
-    discount: 0.95,
-    pointsRate: 1,
-    minSpent: 0
-  },
-  {
-    name: '白银会员',
-    discount: 0.90,
-    pointsRate: 1.5,
-    minSpent: 1000
-  },
-  {
-    name: '黄金会员',
-    discount: 0.85,
-    pointsRate: 2,
-    minSpent: 5000
-  }
-])
-
+const memberLevels = ref([])
 // 会员等级编辑表单
-const levelForm = reactive({
-  name: '',
-  discount: 1,
-  pointsRate: 1,
-  minSpent: 0
-})
+const levelForm = reactive({})
 
 // 表单验证规则
 const basicRules = {
   storeName: [{ required: true, message: '请输入商店名称', trigger: 'blur' }]
 }
 
-// 方法
+// 保存基本设置
 const saveBasicSettings = async () => {
   try {
     await basicFormRef.value.validate()
-    // 保存到应用状态
-    appStore.updateSettings({
-      storeName: basicForm.storeName,
-      currency: basicForm.currency
+    await appStore.updateSettings({
+      shopName: basicForm.storeName,
+      storeAddress: basicForm.storeAddress,
+      storePhone: basicForm.storePhone,
+      businessHours: basicForm.businessHours,
+      storeDescription: basicForm.storeDescription,
+      currency: basicForm.currency,
+      decimalPlaces: basicForm.decimalPlaces
     })
     ElMessage.success('基本设置保存成功')
   } catch {
@@ -512,166 +449,153 @@ const saveBasicSettings = async () => {
   }
 }
 
-const resetBasicSettings = () => {
-  Object.assign(basicForm, {
-    storeName: '便民小店',
-    storeAddress: '',
-    storePhone: '',
-    businessHours: ['09:00', '22:00'],
-    storeDescription: '',
-    currency: 'CNY',
-    decimalPlaces: 2
-  })
-  ElMessage.success('设置已重置')
-}
-
-const saveTaxSettings = () => {
-  appStore.updateSettings({
-    taxRate: taxForm.defaultTaxRate / 100
+// 保存税务设置
+const saveTaxSettings = async () => {
+  await appStore.updateSettings({
+    enableTax: taxForm.enableTax,
+    taxRate: taxForm.defaultTaxRate / 100, // 转换为小数
+    taxNumber: taxForm.taxNumber,
+    taxName: taxForm.taxName
   })
   ElMessage.success('税务设置保存成功')
 }
 
-const saveReceiptSettings = () => {
-  appStore.updateSettings({
+// 保存小票设置
+const saveReceiptSettings = async () => {
+  await appStore.updateSettings({
     autoPrint: receiptForm.autoPrint,
-    receiptFooter: receiptForm.footer
+    paperWidth: receiptForm.paperWidth,
+    receiptHeader: receiptForm.receiptHeader,
+    receiptFooter: receiptForm.receiptFooter,
+    showBarcode: receiptForm.showBarcode,
+    showCashier: receiptForm.showCashier
   })
   ElMessage.success('小票设置保存成功')
 }
 
+// 保存会员设置
+const saveMemberSettings = async () => {
+  await appStore.updateSettings({
+    enablePoints: memberForm.enablePoints,
+    pointsValue: memberForm.pointsValue,
+    pointsExpiry: memberForm.pointsExpiry,
+    memberLevels: memberLevels.value
+  })
+  ElMessage.success('会员设置保存成功')
+}
+
+// 保存系统设置
+const saveSystemSettings = async () => {
+  await appStore.updateSettings({
+    themeColor: systemForm.themeColor,
+    language: systemForm.language,
+    timeFormat: systemForm.timeFormat,
+    autoBackup: systemForm.autoBackup,
+    backupFrequency: systemForm.backupFrequency,
+    dataRetention: systemForm.dataRetention
+  })
+  ElMessage.success('系统设置保存成功')
+}
+
+// 重置基本设置为默认值
+const resetBasicSettings = () => {
+  Object.assign(basicForm, appStore.settings)
+  ElMessage.success('设置已重置')
+}
+
+// 测试打印功能
 const testPrint = () => {
   ElMessage.info('测试打印功能开发中...')
 }
 
-const saveMemberSettings = () => {
-  ElMessage.success('会员设置保存成功')
-}
-
-const editMemberLevel = (level, index) => {
+// 编辑会员等级
+function editMemberLevel(row, index) {
+  Object.assign(levelForm, row)
   editingLevelIndex.value = index
-  Object.assign(levelForm, level)
   showLevelDialog.value = true
 }
 
-const saveMemberLevel = () => {
+// 保存会员等级
+function saveMemberLevel() {
   if (editingLevelIndex.value >= 0) {
-    Object.assign(memberLevels.value[editingLevelIndex.value], levelForm)
-    ElMessage.success('会员等级更新成功')
-  }
-  showLevelDialog.value = false
-}
-
-const saveSystemSettings = () => {
-  ElMessage.success('系统设置保存成功')
-}
-
-const backupData = () => {
-  ElMessage.info('数据备份功能开发中...')
-}
-
-const clearCache = async () => {
-  try {
-    await ElMessageBox.confirm(
-      '清理缓存将删除临时文件，确认继续？',
-      '确认清理',
-      {
-        confirmButtonText: '确认',
-        cancelButtonText: '取消',
-        type: 'warning'
-      }
-    )
-    ElMessage.success('缓存清理成功')
-  } catch {
-    // 用户取消
+    memberLevels.value[editingLevelIndex.value] = { ...levelForm }
+    showLevelDialog.value = false
+    ElMessage.success('会员等级已更新')
   }
 }
 
-const initializeDatabase = async () => {
-  try {
-    await ElMessageBox.confirm(
-      '初始化数据库将清空所有商品、会员、销售等数据，并恢复默认设置，此操作不可撤销，确认继续？',
-      '确认初始化数据库',
-      {
-        confirmButtonText: '确认',
-        cancelButtonText: '取消',
-        type: 'warning'
-      }
-    )
-    
-    const result = await window.ipcRenderer.invoke('reset-database')
-    
-    if (result.success) {
-      ElMessage.success('数据库初始化成功')
-      // 可以选择刷新页面或重新加载数据
-      setTimeout(() => {
-        window.location.reload()
-      }, 1000)
-    }
-  } catch (error) {
-    if (error.message) {
-      ElMessage.error('数据库初始化失败: ' + error.message)
-    }
-    // 用户取消时不显示错误
-  }
+// 清理系统缓存
+function clearCache() {
+  ElMessage.success('缓存已清理');
 }
 
-const resetTableStructure = async () => {
-  try {
-    await ElMessageBox.confirm(
-      '重置表结构将删除并重新创建所有数据表，包括商品表和会员表，所有数据将被清空，此操作不可撤销，确认继续？',
-      '确认重置表结构',
-      {
-        confirmButtonText: '确认',
-        cancelButtonText: '取消',
-        type: 'warning'
-      }
-    )
-    
-    const result = await window.ipcRenderer.invoke('reset-table-structure')
-    
-    if (result.success) {
-      ElMessage.success('表结构重置成功')
-      // 刷新页面以重新加载数据
-      setTimeout(() => {
-        window.location.reload()
-      }, 1000)
-    }
-  } catch (error) {
-    if (error.message) {
-      ElMessage.error('表结构重置失败: ' + error.message)
-    }
-    // 用户取消时不显示错误
-  }
+// 立即备份数据
+function backupData() {
+  ElMessage.info('备份功能开发中...');
 }
 
-const resetSystem = async () => {
-  try {
-    await ElMessageBox.confirm(
-      '重置系统将恢复所有默认设置，此操作不可撤销，确认继续？',
-      '确认重置',
-      {
-        confirmButtonText: '确认',
-        cancelButtonText: '取消',
-        type: 'error'
-      }
-    )
-    ElMessage.success('系统重置成功')
-  } catch {
-    // 用户取消
-  }
+// 初始化数据库
+function initializeDatabase() {
+  ElMessageBox.confirm('确定要初始化数据库吗？此操作不可恢复！', '警告', {
+    confirmButtonText: '确定',
+    cancelButtonText: '取消',
+    type: 'warning'
+  }).then(() => {
+    window.ipcRenderer.invoke('reset-database').then(() => {
+      ElMessage.success('数据库已初始化');
+      appStore.loadSettings();
+      location.reload();
+    });
+  }).catch(() => {
+    // 用户点击取消，不做任何处理
+  });
 }
 
+// 组件挂载时加载设置
 onMounted(async () => {
   await appStore.loadSettings()
-  // 同步 settings 到表单
-  basicForm.storeName = appStore.settings.shopName || '便民小店'
-  basicForm.currency = appStore.settings.currency || 'CNY'
-  if (typeof appStore.settings.taxRate === 'number') {
-    taxForm.defaultTaxRate = appStore.settings.taxRate * 100
-  }
-  receiptForm.autoPrint = appStore.settings.autoPrint ?? false
-  receiptForm.footer = appStore.settings.receiptFooter || '谢谢惠顾，欢迎再次光临！'
+  // 初始化基本设置表单
+  Object.assign(basicForm, {
+    storeName: appStore.settings.shopName,
+    storeAddress: appStore.settings.storeAddress,
+    storePhone: appStore.settings.storePhone,
+    businessHours: appStore.settings.businessHours,
+    storeDescription: appStore.settings.storeDescription,
+    currency: appStore.settings.currency,
+    decimalPlaces: appStore.settings.decimalPlaces
+  })
+  // 初始化税务设置表单
+  Object.assign(taxForm, {
+    enableTax: appStore.settings.enableTax,
+    defaultTaxRate: typeof appStore.settings.taxRate === 'number' ? appStore.settings.taxRate * 100 : 0,
+    taxNumber: appStore.settings.taxNumber,
+    taxName: appStore.settings.taxName
+  })
+  // 初始化小票设置表单
+  Object.assign(receiptForm, {
+    autoPrint: appStore.settings.autoPrint,
+    paperWidth: appStore.settings.paperWidth,
+    receiptHeader: appStore.settings.receiptHeader,
+    receiptFooter: appStore.settings.receiptFooter,
+    showBarcode: appStore.settings.showBarcode,
+    showCashier: appStore.settings.showCashier
+  })
+  // 初始化会员设置表单
+  Object.assign(memberForm, {
+    enablePoints: appStore.settings.enablePoints,
+    pointsValue: appStore.settings.pointsValue,
+    pointsExpiry: appStore.settings.pointsExpiry
+  })
+  memberLevels.value = Array.isArray(appStore.settings.memberLevels) ? appStore.settings.memberLevels : []
+  // 初始化系统设置表单
+  Object.assign(systemForm, {
+    themeColor: appStore.settings.themeColor,
+    language: appStore.settings.language,
+    timeFormat: appStore.settings.timeFormat,
+    autoBackup: appStore.settings.autoBackup,
+    backupFrequency: appStore.settings.backupFrequency,
+    dataRetention: appStore.settings.dataRetention
+  })
 })
 </script>
 
