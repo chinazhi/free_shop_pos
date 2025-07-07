@@ -334,7 +334,7 @@ ipcMain.handle('update-product', async (event, id, productData) => {
 // 删除商品
 ipcMain.handle('delete-product', async (event, id) => {
   try {
-    const sql = 'UPDATE products SET is_active = 0, updated_at = CURRENT_TIMESTAMP WHERE id = ?'
+    const sql = 'DELETE FROM products WHERE id = ?'
     await database.run(sql, [id])
     return { success: true }
   } catch (error) {

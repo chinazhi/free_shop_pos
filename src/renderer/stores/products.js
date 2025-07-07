@@ -133,9 +133,9 @@ export const useProductsStore = defineStore('products', () => {
       if (productData.barcode && checkBarcodeExists(productData.barcode)) {
         throw new Error(`条码 "${productData.barcode}" 已存在，请使用其他条码`)
       }
-      
       const newProduct = await window.ipcRenderer.invoke('add-product', productData)
-      products.value.push(newProduct)
+      // 新增后立即刷新商品列表，确保 id 正确
+      await loadProducts()
       return newProduct
     } catch (error) {
       console.error('添加商品失败:', error)
