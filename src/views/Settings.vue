@@ -203,72 +203,7 @@
           </div>
         </el-tab-pane>
 
-        <!-- 会员设置 -->
-        <el-tab-pane label="会员设置" name="member">
-          <div class="settings-section">
-            <h3>会员等级</h3>
-            <el-table :data="memberLevels" border>
-              <el-table-column prop="name" label="等级名称" width="120" />
-              <el-table-column prop="discount" label="折扣率" width="100" align="center">
-                <template #default="{ row }">
-                  {{ (row.discount * 100).toFixed(0) }}%
-                </template>
-              </el-table-column>
-              <el-table-column prop="pointsRate" label="积分倍率" width="100" align="center">
-                <template #default="{ row }">
-                  {{ row.pointsRate }}x
-                </template>
-              </el-table-column>
-              <el-table-column prop="minSpent" label="升级条件" width="120" align="right">
-                <template #default="{ row }">
-                  ¥{{ row.minSpent.toFixed(2) }}
-                </template>
-              </el-table-column>
-              <el-table-column label="操作" width="150">
-                <template #default="{ row, $index }">
-                  <el-button type="primary" size="small" @click="editMemberLevel(row, $index)">
-                    编辑
-                  </el-button>
-                </template>
-              </el-table-column>
-            </el-table>
-          </div>
 
-          <div class="settings-section">
-            <h3>积分设置</h3>
-            <el-form label-width="120px">
-              <el-form-item label="启用积分">
-                <el-switch v-model="memberForm.enablePoints" />
-              </el-form-item>
-              <el-form-item v-if="memberForm.enablePoints" label="积分抵扣">
-                <el-input-number
-                  v-model="memberForm.pointsValue"
-                  :min="0"
-                  :precision="4"
-                  :step="0.01"
-                  :value="0.01"
-                  style="width: 200px"
-                />
-                <span style="margin-left: 10px;">元/积分</span>
-              </el-form-item>
-              <el-form-item v-if="memberForm.enablePoints" label="积分有效期">
-                <el-input-number
-                  v-model="memberForm.pointsExpiry"
-                  :min="1"
-                  :precision="0"
-                  style="width: 200px"
-                />
-                <span style="margin-left: 10px;">天</span>
-              </el-form-item>
-            </el-form>
-          </div>
-
-          <div class="settings-actions">
-            <el-button type="primary" @click="saveMemberSettings">
-              保存设置
-            </el-button>
-          </div>
-        </el-tab-pane>
 
         <!-- 系统设置 -->
         <el-tab-pane label="系统设置" name="system">
@@ -277,6 +212,17 @@
             <el-form label-width="120px">
               <el-form-item label="主题色彩">
                 <el-color-picker v-model="systemForm.themeColor" />
+              </el-form-item>
+              <el-form-item label="字体大小">
+                <el-select v-model="systemForm.fontSize" placeholder="选择字体大小">
+                  <el-option label="小 (14px)" value="sm" />
+                  <el-option label="标准 (16px)" value="md" />
+                  <el-option label="大 (18px)" value="lg" />
+                  <el-option label="特大 (20px)" value="xl" />
+                </el-select>
+                <div class="font-size-preview" :class="`font-size-${systemForm.fontSize}`">
+                  预览文字效果 - 便利店收银系统
+                </div>
               </el-form-item>
               <el-form-item label="语言">
                 <el-select v-model="systemForm.language" placeholder="选择语言">
@@ -321,17 +267,9 @@
           <div class="settings-section">
             <h3>系统操作</h3>
             <div class="system-actions">
-              <el-button type="primary" @click="backupData">
-                <el-icon><Download /></el-icon>
-                立即备份
-              </el-button>
-              <el-button type="warning" @click="clearCache">
-                <el-icon><Delete /></el-icon>
-                清理缓存
-              </el-button>
               <el-button type="info" @click="initializeDatabase">
                 <el-icon><Refresh /></el-icon>
-                初始化数据库
+                初始化系统数据库
               </el-button>
             </div>
           </div>
@@ -345,51 +283,7 @@
       </el-tabs>
     </div>
 
-    <!-- 编辑会员等级对话框 -->
-    <el-dialog
-      v-model="showLevelDialog"
-      title="编辑会员等级"
-      width="400px"
-    >
-      <el-form
-        ref="levelFormRef"
-        :model="levelForm"
-        label-width="100px"
-      >
-        <el-form-item label="等级名称">
-          <el-input v-model="levelForm.name" placeholder="等级名称" />
-        </el-form-item>
-        <el-form-item label="折扣率">
-          <el-input-number
-            v-model="levelForm.discount"
-            :min="0"
-            :max="1"
-            :precision="2"
-            style="width: 100%"
-          />
-        </el-form-item>
-        <el-form-item label="积分倍率">
-          <el-input-number
-            v-model="levelForm.pointsRate"
-            :min="1"
-            :max="10"
-            style="width: 100%"
-          />
-        </el-form-item>
-        <el-form-item label="升级条件">
-          <el-input-number
-            v-model="levelForm.minSpent"
-            :min="0"
-            :precision="2"
-            style="width: 100%"
-          />
-        </el-form-item>
-      </el-form>
-      <template #footer>
-        <el-button @click="showLevelDialog = false">取消</el-button>
-        <el-button type="primary" @click="saveMemberLevel">保存</el-button>
-      </template>
-    </el-dialog>
+
   </div>
 </template>
 
@@ -398,17 +292,15 @@ import { ref, reactive, onMounted } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { Tools } from '@element-plus/icons-vue'
 import { useAppStore } from '../stores/app'
+import dbManager from '../utils/indexedDB'
 
 const appStore = useAppStore()
 
 // 响应式数据
 const activeTab = ref('basic')
-const showLevelDialog = ref(false)
-const editingLevelIndex = ref(-1)
 
 // 表单引用
 const basicFormRef = ref()
-const levelFormRef = ref()
 
 // 基本设置表单
 const basicForm = reactive({})
@@ -416,14 +308,8 @@ const basicForm = reactive({})
 const taxForm = reactive({})
 // 小票设置表单
 const receiptForm = reactive({})
-// 会员设置表单
-const memberForm = reactive({})
 // 系统设置表单
 const systemForm = reactive({})
-// 会员等级数据
-const memberLevels = ref([])
-// 会员等级编辑表单
-const levelForm = reactive({})
 
 // 表单验证规则
 const basicRules = {
@@ -473,27 +359,21 @@ const saveReceiptSettings = async () => {
   ElMessage.success('小票设置保存成功')
 }
 
-// 保存会员设置
-const saveMemberSettings = async () => {
-  await appStore.updateSettings({
-    enablePoints: memberForm.enablePoints,
-    pointsValue: memberForm.pointsValue,
-    pointsExpiry: memberForm.pointsExpiry,
-    memberLevels: memberLevels.value
-  })
-  ElMessage.success('会员设置保存成功')
-}
+
 
 // 保存系统设置
 const saveSystemSettings = async () => {
   await appStore.updateSettings({
     themeColor: systemForm.themeColor,
+    fontSize: systemForm.fontSize,
     language: systemForm.language,
     timeFormat: systemForm.timeFormat,
     autoBackup: systemForm.autoBackup,
     backupFrequency: systemForm.backupFrequency,
     dataRetention: systemForm.dataRetention
   })
+  // 应用字体大小到全局
+  applyFontSize(systemForm.fontSize)
   ElMessage.success('系统设置保存成功')
 }
 
@@ -508,30 +388,16 @@ const testPrint = () => {
   ElMessage.info('测试打印功能开发中...')
 }
 
-// 编辑会员等级
-function editMemberLevel(row, index) {
-  Object.assign(levelForm, row)
-  editingLevelIndex.value = index
-  showLevelDialog.value = true
-}
 
-// 保存会员等级
-function saveMemberLevel() {
-  if (editingLevelIndex.value >= 0) {
-    memberLevels.value[editingLevelIndex.value] = { ...levelForm }
-    showLevelDialog.value = false
-    ElMessage.success('会员等级已更新')
+// 应用字体大小到全局
+const applyFontSize = (fontSize) => {
+  const root = document.documentElement
+  // 移除之前的字体大小类
+  root.classList.remove('font-size-sm', 'font-size-md', 'font-size-lg', 'font-size-xl')
+  // 添加新的字体大小类
+  if (fontSize) {
+    root.classList.add(`font-size-${fontSize}`)
   }
-}
-
-// 清理系统缓存
-function clearCache() {
-  ElMessage.success('缓存已清理');
-}
-
-// 立即备份数据
-function backupData() {
-  ElMessage.info('备份功能开发中...');
 }
 
 // 初始化数据库
@@ -540,12 +406,28 @@ function initializeDatabase() {
     confirmButtonText: '确定',
     cancelButtonText: '取消',
     type: 'warning'
-  }).then(() => {
-    window.ipcRenderer.invoke('reset-database').then(() => {
+  }).then(async () => {
+    try {
+      await dbManager.init();
+      
+      // 清空所有数据表
+      const stores = ['products', 'categories', 'sales', 'sale_items', 'settings'];
+      for (const storeName of stores) {
+        const transaction = dbManager.db.transaction([storeName], 'readwrite');
+        const store = transaction.objectStore(storeName);
+        await store.clear();
+      }
+      
+      // 重新初始化默认数据
+      await dbManager.initDefaultData();
+      
       ElMessage.success('数据库已初始化');
       appStore.loadSettings();
       location.reload();
-    });
+    } catch (error) {
+      console.error('初始化数据库失败:', error);
+      ElMessage.error('初始化数据库失败');
+    }
   }).catch(() => {
     // 用户点击取消，不做任何处理
   });
@@ -556,17 +438,17 @@ onMounted(async () => {
   await appStore.loadSettings()
   // 初始化基本设置表单
   Object.assign(basicForm, {
-    storeName: appStore.settings.shopName,
+    storeName: appStore.settings.shopName || '糖果便利店',
     storeAddress: appStore.settings.storeAddress,
     storePhone: appStore.settings.storePhone,
     businessHours: appStore.settings.businessHours,
     storeDescription: appStore.settings.storeDescription,
-    currency: appStore.settings.currency,
-    decimalPlaces: appStore.settings.decimalPlaces
+    currency: appStore.settings.currency || 'CNY',
+    decimalPlaces: appStore.settings.decimalPlaces || 2
   })
   // 初始化税务设置表单
   Object.assign(taxForm, {
-    enableTax: appStore.settings.enableTax,
+    enableTax: appStore.settings.enableTax || false,
     defaultTaxRate: typeof appStore.settings.taxRate === 'number' ? appStore.settings.taxRate * 100 : 0,
     taxNumber: appStore.settings.taxNumber,
     taxName: appStore.settings.taxName
@@ -580,22 +462,20 @@ onMounted(async () => {
     showBarcode: appStore.settings.showBarcode,
     showCashier: appStore.settings.showCashier
   })
-  // 初始化会员设置表单
-  Object.assign(memberForm, {
-    enablePoints: appStore.settings.enablePoints,
-    pointsValue: appStore.settings.pointsValue,
-    pointsExpiry: appStore.settings.pointsExpiry
-  })
-  memberLevels.value = Array.isArray(appStore.settings.memberLevels) ? appStore.settings.memberLevels : []
+
   // 初始化系统设置表单
   Object.assign(systemForm, {
-    themeColor: appStore.settings.themeColor,
-    language: appStore.settings.language,
-    timeFormat: appStore.settings.timeFormat,
+    themeColor: appStore.settings.themeColor || '#ffffff',
+    fontSize: appStore.settings.fontSize || 'md',
+    language: appStore.settings.language || 'zh-CN',
+    timeFormat: appStore.settings.timeFormat || '24',
     autoBackup: appStore.settings.autoBackup,
     backupFrequency: appStore.settings.backupFrequency,
     dataRetention: appStore.settings.dataRetention
   })
+  
+  // 应用当前字体大小设置
+  applyFontSize(systemForm.fontSize)
 })
 </script>
 
@@ -719,6 +599,33 @@ onMounted(async () => {
 
 :deep(.el-tabs--left .el-tabs__nav-wrap) {
   background: #f8f9fa;
+}
+
+/* 字体大小预览样式 */
+.font-size-preview {
+  margin-top: 10px;
+  padding: 10px;
+  background: #f5f7fa;
+  border-radius: 4px;
+  border: 1px solid #e4e7ed;
+  color: #606266;
+  transition: font-size 0.3s ease;
+}
+
+.font-size-preview.font-size-sm {
+  font-size: 14px;
+}
+
+.font-size-preview.font-size-md {
+  font-size: 16px;
+}
+
+.font-size-preview.font-size-lg {
+  font-size: 18px;
+}
+
+.font-size-preview.font-size-xl {
+  font-size: 20px;
 }
 
 :deep(.el-tabs--left .el-tabs__item) {

@@ -45,28 +45,34 @@
       </div>
     </div>
 
-    <!-- 搜索和操作栏 -->
-    <div class="search-bar">
-      <el-row :gutter="20" align="middle">
-        <el-col :span="5">
+    <!-- 搜索和筛选栏 -->
+    <div class="search-filter-container">
+      <!-- 筛选条件区域 -->
+      <div class="filter-section">
+        <div class="filter-item">
+          <label class="filter-label">商品搜索：</label>
           <el-input
             v-model="searchKeyword"
             placeholder="搜索商品名称或条码"
             clearable
+            size="default"
+            class="search-input"
             @input="handleSearch"
           >
             <template #prefix>
               <el-icon><Search /></el-icon>
             </template>
           </el-input>
-        </el-col>
-        <el-col :span="4">
+        </div>
+        <div class="filter-item">
+          <label class="filter-label">商品分类：</label>
           <el-select
             v-model="selectedCategory"
-            placeholder="选择分类"
+            placeholder="分类筛选"
             clearable
+            size="default"
+            class="category-select"
             @change="handleCategoryChange"
-            style="width: 100%"
           >
             <el-option label="全部分类" value="" />
             <el-option
@@ -76,36 +82,64 @@
               :value="category.name"
             />
           </el-select>
-        </el-col>
-        <el-col :span="3">
-          <el-select v-model="stockFilter" placeholder="库存状态" clearable style="width: 100%">
+        </div>
+        <div class="filter-item">
+          <label class="filter-label">库存状态：</label>
+          <el-select 
+            v-model="stockFilter" 
+            placeholder="库存状态" 
+            clearable 
+            size="default"
+            class="stock-select"
+          >
             <el-option label="全部" value="" />
             <el-option label="正常" value="normal" />
             <el-option label="库存不足" value="low" />
             <el-option label="缺货" value="out" />
           </el-select>
-        </el-col>
-        <el-col :span="12">
-          <div class="button-group">
-            <el-button type="primary" @click="showAddDialog = true">
-              <el-icon><Plus /></el-icon>
-              添加商品
-            </el-button>
-            <el-button @click="handleImport">
-              <el-icon><Upload /></el-icon>
-              批量导入
-            </el-button>
-            <el-button @click="handleExport">
-              <el-icon><Download /></el-icon>
-              导出数据
-            </el-button>
-            <el-button @click="showCategoryDialog = true">
-              <el-icon><Setting /></el-icon>
-              分类管理
-            </el-button>
-          </div>
-        </el-col>
-      </el-row>
+        </div>
+        <div class="filter-item action-item">
+          <el-button 
+            type="primary" 
+            size="default"
+            @click="showAddDialog = true"
+            class="primary-button"
+          >
+            <el-icon><Plus /></el-icon>
+            新增商品
+          </el-button>
+        </div>
+        <div class="filter-item">
+          <el-button 
+            size="default"
+            @click="handleImport"
+            class="action-button"
+          >
+            <el-icon><Upload /></el-icon>
+            导入
+          </el-button>
+        </div>
+        <div class="filter-item">
+          <el-button 
+            size="default"
+            @click="handleExport"
+            class="action-button"
+          >
+            <el-icon><Download /></el-icon>
+            导出
+          </el-button>
+        </div>
+        <div class="filter-item">
+          <el-button 
+            size="default"
+            @click="showCategoryDialog = true"
+            class="action-button"
+          >
+            <el-icon><Setting /></el-icon>
+            分类管理
+          </el-button>
+        </div>
+      </div>
     </div>
 
     <!-- 商品表格 -->
@@ -121,7 +155,11 @@
         <el-table-column type="selection" width="55" />
         <el-table-column prop="barcode" label="条码" width="150" />
         <el-table-column prop="name" label="商品名称" min-width="200" />
-        <el-table-column prop="category" label="分类" width="120" />
+        <el-table-column label="分类" width="120">
+          <template #default="{ row }">
+            {{ getCategoryName(row.category_id) }}
+          </template>
+        </el-table-column>
         <el-table-column prop="price" label="售价" width="100" align="right">
           <template #default="{ row }">
             ¥{{ (row.price !== undefined && row.price !== null ? Number(row.price).toFixed(2) : '0.00') }}
@@ -268,12 +306,12 @@
             </el-form-item>
           </el-col>
         </el-row>
-        <el-form-item label="描述">
+        <el-form-item label="描述" prop="description">
           <el-input
             v-model="productForm.description"
             type="textarea"
             :rows="3"
-            placeholder="商品描述"
+            placeholder="商品描述（可选）"
           />
         </el-form-item>
       </el-form>
@@ -380,7 +418,7 @@
         ref="categoryFormRef"
         :model="categoryForm"
         :rules="categoryRules"
-        label-width="80px"
+        label-width="100px"
       >
         <el-form-item label="分类名称" prop="name">
           <el-input v-model="categoryForm.name" placeholder="请输入分类名称" />
@@ -435,10 +473,10 @@ const productForm = reactive({
   category: '',
   price: 0,
   cost: 0,
-  stock: 0,
-  min_stock: 0,
+  stock: 10,           // 默认库存10件
+  min_stock: 2,        // 默认最低库存5件
   description: '',
-  is_active: 0
+  is_active: true      // 默认激活状态
 })
 
 const categoryForm = reactive({
@@ -448,10 +486,34 @@ const categoryForm = reactive({
 
 // 表单验证规则
 const productRules = {
-  name: [{ required: true, message: '请输入商品名称', trigger: 'blur' }],
+  barcode: [
+    { required: true, message: '请输入商品条码', trigger: 'blur' },
+    { min: 1, message: '条码不能为空', trigger: 'blur' }
+  ],
+  name: [
+    { required: true, message: '请输入商品名称', trigger: 'blur' },
+    { min: 1, message: '商品名称不能为空', trigger: 'blur' }
+  ],
   category: [{ required: true, message: '请选择商品分类', trigger: 'change' }],
-  price: [{ required: true, message: '请输入售价', trigger: 'blur' }],
-  cost: [{ required: true, message: '请输入成本', trigger: 'blur' }]
+  price: [
+    { required: true, message: '请输入售价', trigger: 'blur' },
+    { type: 'number', min: 0, message: '售价不能小于0', trigger: 'blur' }
+  ],
+  cost: [
+    { required: true, message: '请输入成本', trigger: 'blur' },
+    { type: 'number', min: 0, message: '成本不能小于0', trigger: 'blur' }
+  ],
+  stock: [
+    { required: true, message: '请输入库存数量', trigger: 'blur' },
+    { type: 'number', min: 0, message: '库存不能小于0', trigger: 'blur' }
+  ],
+  min_stock: [
+    { required: true, message: '请输入最低库存', trigger: 'blur' },
+    { type: 'number', min: 0, message: '最低库存不能小于0', trigger: 'blur' }
+  ],
+  description: [
+    { max: 500, message: '描述不能超过500个字符', trigger: 'blur' }
+  ]
 }
 
 const categoryRules = {
@@ -476,7 +538,11 @@ const filteredProducts = computed(() => {
   
   // 分类过滤
   if (selectedCategory.value) {
-    products = products.filter(p => p.category === selectedCategory.value)
+    // 根据分类名称查找分类ID
+    const categoryObj = productsStore.categories.find(cat => cat.name === selectedCategory.value)
+    if (categoryObj) {
+      products = products.filter(p => p.category_id === categoryObj.id)
+    }
   }
   
   // 库存状态过滤
@@ -534,7 +600,19 @@ const handleStatusChange = async (product) => {
   console.log('[handleStatusChange] 触发，product:', JSON.parse(JSON.stringify(product)))
   if (!product || typeof product.id === 'undefined') return;
   try {
-    await productsStore.updateProduct(product.id, { is_active: product.is_active })
+    // 创建完整的商品数据对象，只更新状态字段
+    const updatedData = {
+      barcode: product.barcode,
+      name: product.name,
+      price: product.price,
+      cost: product.cost,
+      stock: product.stock,
+      min_stock: product.min_stock,
+      description: product.description,
+      category_id: product.category_id,
+      is_active: product.is_active
+    }
+    await productsStore.updateProduct(product.id, updatedData)
     console.log('[handleStatusChange] 状态更新成功', product)
     ElMessage.success('状态更新成功')
   } catch (error) {
@@ -546,8 +624,14 @@ const handleStatusChange = async (product) => {
 
 const editProduct = (product) => {
   editingProduct.value = product
+  
+  // 根据category_id查找分类名称
+  const categoryObj = productsStore.categories.find(cat => cat.id === product.category_id)
+  const categoryName = categoryObj ? categoryObj.name : ''
+  
   Object.assign(productForm, {
     ...product,
+    category: categoryName,  // 使用分类名称而不是category_id
     is_active: product.is_active === 1  // 转换为布尔值
   })
   showAddDialog.value = true
@@ -602,8 +686,23 @@ const saveProduct = async () => {
   try {
     await productFormRef.value.validate()
     
+    // 查找分类ID
+    const selectedCategoryObj = productsStore.categories.find(cat => cat.name === productForm.category)
+    if (!selectedCategoryObj) {
+      ElMessage.error('请选择有效的商品分类')
+      return
+    }
+    
+    // 创建一个普通对象，避免Vue响应式代理对象导致的克隆问题
     const productData = {
-      ...productForm,
+      barcode: productForm.barcode,
+      name: productForm.name,
+      price: productForm.price,
+      cost: productForm.cost,
+      stock: productForm.stock,
+      min_stock: productForm.min_stock,
+      description: productForm.description,
+      category_id: selectedCategoryObj.id,  // 使用category_id而不是category
       is_active: productForm.is_active ? 1 : 0  // 转换为数值
     }
     
@@ -649,16 +748,256 @@ const saveStockAdjust = async () => {
 }
 
 const handleImport = () => {
-  ElMessage.info('批量导入功能开发中...')
+  // 创建文件输入元素
+  const input = document.createElement('input')
+  input.type = 'file'
+  input.accept = '.xlsx,.xls'
+  input.style.display = 'none'
+  
+  input.onchange = async (event) => {
+    const file = event.target.files[0]
+    if (!file) return
+    
+    try {
+      // 动态导入xlsx库
+      const XLSX = await import('xlsx')
+      
+      // 读取文件
+      const reader = new FileReader()
+      reader.onload = async (e) => {
+        try {
+          const data = new Uint8Array(e.target.result)
+          const workbook = XLSX.read(data, { type: 'array' })
+          
+          // 获取第一个工作表
+          const sheetName = workbook.SheetNames[0]
+          const worksheet = workbook.Sheets[sheetName]
+          
+          // 转换为JSON数据
+          const jsonData = XLSX.utils.sheet_to_json(worksheet)
+          
+          if (jsonData.length === 0) {
+            ElMessage.warning('Excel文件中没有数据')
+            return
+          }
+          
+          // 验证和处理数据
+          const validData = []
+          const errors = []
+          
+          for (let i = 0; i < jsonData.length; i++) {
+            const row = jsonData[i]
+            const rowNum = i + 2 // Excel行号（从第2行开始）
+            
+            try {
+              // 验证必填字段
+              if (!row['条码'] || !row['商品名称']) {
+                errors.push(`第${rowNum}行：条码和商品名称为必填项`)
+                continue
+              }
+              
+              // 查找分类ID，不存在时设为null（未分类）
+               let categoryId = null
+               if (row['分类']) {
+                 const category = productsStore.categories.find(cat => cat.name === row['分类'])
+                 if (category) {
+                   categoryId = category.id
+                 }
+                 // 如果分类不存在，categoryId保持为null，表示未分类
+               }
+              
+              // 构建商品数据
+              const productData = {
+                barcode: String(row['条码'] || '').trim(),
+                name: String(row['商品名称'] || '').trim(),
+                category_id: categoryId,
+                price: parseFloat(row['售价']) || 0,
+                cost: parseFloat(row['成本']) || 0,
+                stock: parseInt(row['库存']) || 0,
+                min_stock: parseInt(row['最低库存']) || 0,
+                description: String(row['描述'] || '').trim(),
+                is_active: row['状态'] === '禁用' ? 0 : 1
+              }
+              
+              // 验证数据有效性
+              if (productData.price < 0) {
+                errors.push(`第${rowNum}行：售价不能为负数`)
+                continue
+              }
+              if (productData.cost < 0) {
+                errors.push(`第${rowNum}行：成本不能为负数`)
+                continue
+              }
+              if (productData.stock < 0) {
+                errors.push(`第${rowNum}行：库存不能为负数`)
+                continue
+              }
+              if (productData.min_stock < 0) {
+                errors.push(`第${rowNum}行：最低库存不能为负数`)
+                continue
+              }
+              
+              validData.push(productData)
+            } catch (error) {
+              errors.push(`第${rowNum}行：数据格式错误 - ${error.message}`)
+            }
+          }
+          
+          // 显示验证结果
+          if (errors.length > 0) {
+            const errorMsg = errors.slice(0, 5).join('\n') + (errors.length > 5 ? `\n...还有${errors.length - 5}个错误` : '')
+            await ElMessageBox.alert(errorMsg, '数据验证失败', {
+              confirmButtonText: '确定',
+              type: 'warning'
+            })
+            return
+          }
+          
+          if (validData.length === 0) {
+            ElMessage.warning('没有有效的数据可以导入')
+            return
+          }
+          
+          // 确认导入
+          await ElMessageBox.confirm(
+            `共找到 ${validData.length} 条有效数据，确定要导入吗？`,
+            '确认导入',
+            {
+              confirmButtonText: '确定导入',
+              cancelButtonText: '取消',
+              type: 'info'
+            }
+          )
+          
+          // 批量导入数据
+           let successCount = 0
+           let failCount = 0
+           let updateCount = 0
+           
+           for (const productData of validData) {
+             try {
+               // 检查条码是否已存在
+               const existingProduct = productsStore.products.find(p => p.barcode === productData.barcode)
+               
+               if (existingProduct) {
+                 // 更新现有商品
+                 await productsStore.updateProduct(existingProduct.id, productData)
+                 updateCount++
+               } else {
+                 // 添加新商品
+                 await productsStore.addProduct(productData)
+                 successCount++
+               }
+             } catch (error) {
+               console.error('导入商品失败:', error)
+               failCount++
+             }
+           }
+          
+          // 显示导入结果
+           if (failCount === 0) {
+             if (updateCount > 0) {
+               ElMessage.success(`导入成功！新增 ${successCount} 个商品，更新 ${updateCount} 个商品`)
+             } else {
+               ElMessage.success(`导入成功！共新增 ${successCount} 个商品`)
+             }
+           } else {
+             ElMessage.warning(`导入完成！新增 ${successCount} 个，更新 ${updateCount} 个，失败 ${failCount} 个`)
+           }
+          
+        } catch (error) {
+          console.error('解析Excel文件失败:', error)
+          ElMessage.error('解析Excel文件失败，请检查文件格式')
+        }
+      }
+      
+      reader.readAsArrayBuffer(file)
+      
+    } catch (error) {
+      console.error('导入失败:', error)
+      ElMessage.error('导入失败：无法加载导入组件')
+    }
+  }
+  
+  // 触发文件选择
+  document.body.appendChild(input)
+  input.click()
+  document.body.removeChild(input)
 }
 
 const handleExport = () => {
-  ElMessage.info('导出功能开发中...')
+  try {
+    // 动态导入xlsx库
+    import('xlsx').then(XLSX => {
+      // 准备导出数据
+      const exportData = filteredProducts.value.map(product => ({
+        '条码': product.barcode || '',
+        '商品名称': product.name || '',
+        '分类': getCategoryName(product.category_id),
+        '售价': product.price ? Number(product.price).toFixed(2) : '0.00',
+        '成本': product.cost ? Number(product.cost).toFixed(2) : '0.00',
+        '库存': product.stock || 0,
+        '最低库存': product.min_stock || 0,
+        '状态': product.is_active === 1 ? '启用' : '禁用',
+        '描述': product.description || ''
+      }))
+      
+      // 创建工作簿
+      const wb = XLSX.utils.book_new()
+      const ws = XLSX.utils.json_to_sheet(exportData)
+      
+      // 设置列宽
+      const colWidths = [
+        { wch: 15 }, // 条码
+        { wch: 20 }, // 商品名称
+        { wch: 12 }, // 分类
+        { wch: 10 }, // 售价
+        { wch: 10 }, // 成本
+        { wch: 8 },  // 库存
+        { wch: 10 }, // 最低库存
+        { wch: 8 },  // 状态
+        { wch: 30 }  // 描述
+      ]
+      ws['!cols'] = colWidths
+      
+      // 添加工作表到工作簿
+      XLSX.utils.book_append_sheet(wb, ws, '商品列表')
+      
+      // 生成文件名（包含当前日期时间）
+      const now = new Date()
+      const dateStr = now.getFullYear() + 
+        String(now.getMonth() + 1).padStart(2, '0') + 
+        String(now.getDate()).padStart(2, '0') + '_' +
+        String(now.getHours()).padStart(2, '0') + 
+        String(now.getMinutes()).padStart(2, '0')
+      const fileName = `商品列表_${dateStr}.xlsx`
+      
+      // 导出文件
+      XLSX.writeFile(wb, fileName)
+      
+      ElMessage.success(`导出成功！文件名：${fileName}`)
+    }).catch(error => {
+      console.error('导入xlsx库失败:', error)
+      ElMessage.error('导出失败：无法加载导出组件')
+    })
+  } catch (error) {
+    console.error('导出失败:', error)
+    ElMessage.error('导出失败')
+  }
+}
+
+// 根据分类ID获取分类名称
+const getCategoryName = (categoryId) => {
+  const category = productsStore.categories.find(cat => cat.id === categoryId)
+  return category ? category.name : '未分类'
 }
 
 // 分类管理相关方法
 const getProductCountByCategory = (categoryName) => {
-  return productsStore.products.filter(p => p.category === categoryName).length
+  // 根据分类名称查找分类ID
+  const categoryObj = productsStore.categories.find(cat => cat.name === categoryName)
+  if (!categoryObj) return 0
+  return productsStore.products.filter(p => p.category_id === categoryObj.id).length
 }
 
 const editCategory = (category) => {
@@ -701,11 +1040,17 @@ const saveCategory = async () => {
   try {
     await categoryFormRef.value.validate()
     
+    // 创建一个普通对象，避免Vue响应式代理对象导致的克隆问题
+    const categoryData = {
+      name: categoryForm.name,
+      description: categoryForm.description
+    }
+    
     if (editingCategory.value) {
-      await productsStore.updateCategory(editingCategory.value.id, categoryForm)
+      await productsStore.updateCategory(editingCategory.value.id, categoryData)
       ElMessage.success('分类更新成功')
     } else {
-      await productsStore.addCategory(categoryForm)
+      await productsStore.addCategory(categoryData)
       ElMessage.success('分类添加成功')
     }
     
@@ -848,29 +1193,104 @@ onMounted(async () => {
   padding: 0 20px;
 }
 
+/* 搜索和筛选栏样式 */
+.search-filter-container {
+  background: white;
+  border-radius: 8px;
+  margin-bottom: 20px;
+  box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+  border: 1px solid #e8e8e8;
+}
+
+.filter-section {
+  padding: 20px 24px;
+  display: flex;
+  align-items: center;
+  gap: 24px;
+  flex-wrap: wrap;
+}
+
+.filter-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.action-item {
+  margin-left: auto;
+}
+
+.filter-label {
+  font-size: 14px;
+  color: #606266;
+  font-weight: 500;
+  white-space: nowrap;
+  min-width: 70px;
+}
+
+.search-input {
+  width: 280px;
+}
+
+.category-select {
+  width: 160px;
+}
+
+.stock-select {
+  width: 140px;
+}
+
+.primary-button {
+  min-width: 100px;
+}
+
+.action-button {
+  min-width: 80px;
+}
+
+/* 响应式设计 */
 @media (max-width: 576px) {
-  .search-bar {
-    padding: 15px;
+  .search-content {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 16px;
   }
   
-  .search-bar .el-col {
-    margin-bottom: 15px;
+  .search-section {
+    flex-direction: column;
+    gap: 12px;
   }
   
-  .button-group {
+  .search-input,
+  .filter-select {
+    width: 100%;
+  }
+  
+  .action-section {
     justify-content: center;
-    margin-top: 15px;
+  }
+  
+  .secondary-actions {
+    flex-wrap: wrap;
+    justify-content: center;
   }
 }
 
 @media (max-width: 768px) {
-  .search-bar .el-col {
-    margin-bottom: 12px;
+  .search-content {
+    gap: 16px;
   }
   
-  .button-group {
-    justify-content: flex-start;
-    margin-top: 12px;
+  .search-section {
+    flex-wrap: wrap;
+  }
+  
+  .search-input {
+    width: 240px;
+  }
+  
+  .filter-select {
+    width: 120px;
   }
   
   .stats-grid {
@@ -879,8 +1299,12 @@ onMounted(async () => {
 }
 
 @media (max-width: 992px) {
-  .button-group {
-    margin-top: 10px;
+  .search-content {
+    flex-direction: column;
+    align-items: stretch;
+  }
+  
+  .action-section {
     justify-content: flex-start;
   }
 }

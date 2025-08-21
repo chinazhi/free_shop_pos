@@ -1,11 +1,11 @@
 import { defineStore } from 'pinia'
 import { ref, computed } from 'vue'
 import { useProductsStore } from './products'
+import dbManager from '../utils/indexedDB.js'
 
 export const useCartStore = defineStore('cart', () => {
   // 状态
   const items = ref([])
-  const currentMember = ref(null)
   const discount = ref(0)
   const paymentMethod = ref('cash')
   const receivedAmount = ref(0)
@@ -105,32 +105,9 @@ export const useCartStore = defineStore('cart', () => {
 
   const clearCart = () => {
     items.value = []
-    currentMember.value = null
     discount.value = 0
     receivedAmount.value = 0
     paymentMethod.value = 'cash'
-  }
-
-  const setMember = (member) => {
-    currentMember.value = member
-    // 可以根据会员等级设置折扣
-    if (member) {
-      switch (member.level) {
-        case 'gold':
-          discount.value = 10
-          break
-        case 'silver':
-          discount.value = 5
-          break
-        case 'bronze':
-          discount.value = 2
-          break
-        default:
-          discount.value = 0
-      }
-    } else {
-      discount.value = 0
-    }
   }
 
   const setDiscount = (discountPercent) => {
@@ -186,7 +163,6 @@ export const useCartStore = defineStore('cart', () => {
     return errors
   }
 
-  // 优化后的 checkout，异常处理和依赖注入优化
   const checkout = async () => {
     const productsStore = useProductsStore()
     const errors = validateCart()
@@ -201,68 +177,41 @@ export const useCartStore = defineStore('cart', () => {
       // 构建销售记录
       const saleData = {
         order_no: orderNo,
-        member_id: currentMember.value?.id || null,
         total_amount: subtotal.value,
         discount_amount: discountAmount.value,
         tax_amount: taxAmount.value,
         final_amount: totalAmount.value,
         payment_method: paymentMethod.value,
         payment_status: 'completed',
-        cashier: 'current_user'
+        sale_date: new Date().toISOString(),
+        cashier: '收银员',
+        received_amount: receivedAmount.value,
+        change_amount: changeAmount.value
       }
-      // 校验库存
-      const stockUpdates = []
-      const logs = []
-      const itemsArr = []
+      
+      // 保存销售记录
+      const saleId = await dbManager.add('sales', saleData)
+      
+      // 保存销售商品明细并更新库存
       for (const item of items.value) {
         const product = productsStore.getProductById(item.product_id)
         if (!product || toNumber(product.stock) < toNumber(item.quantity)) {
           throw new Error(`商品 ${item.name} 库存不足，当前库存：${product ? product.stock : 0}`)
         }
-        // 计算新库存
-        const newStock = toNumber(product.stock) - toNumber(item.quantity)
-        stockUpdates.push({ product_id: item.product_id, new_stock: newStock })
-        logs.push({
-          product_id: item.product_id,
-          type: 'out',
-          quantity: toNumber(item.quantity),
-          before_stock: toNumber(product.stock),
-          after_stock: newStock,
-          reason: '销售出库',
-          operator: 'current_user'
-        })
-        itemsArr.push({
+        
+        // 保存销售明细
+        await dbManager.add('sale_items', {
+          sale_id: saleId,
           product_id: item.product_id,
           quantity: toNumber(item.quantity),
           unit_price: toNumber(item.unit_price),
           total_price: toNumber(item.total_price),
           discount: toNumber(item.discount)
         })
+        
+        // 更新商品库存
+        await productsStore.updateStock(item.product_id, toNumber(item.quantity), 'out')
       }
-      let memberPoints = null
-      if (currentMember.value && currentMember.value.id) {
-        // 假设每消费1元积1分，可根据实际规则调整
-        const beforePoints = toNumber(currentMember.value.points)
-        const changeAmount = Math.floor(totalAmount.value)
-        const afterPoints = beforePoints + changeAmount
-        memberPoints = {
-          type: 'sale',
-          change_amount: changeAmount,
-          before_points: beforePoints,
-          after_points: afterPoints,
-          reason: '消费积分',
-          operator: 'current_user'
-        }
-      }
-      const result = await window.ipcRenderer.invoke('process-sale', {
-        sale: saleData,
-        items: itemsArr,
-        stockUpdates,
-        logs,
-        memberPoints
-      })
-      if (!result.success) throw new Error(result.error || '结账失败')
-      await window.ipcRenderer.invoke('print-receipt', { orderNo, saleData })
       
       // 保存订单信息用于返回
       const orderInfo = {
@@ -283,7 +232,6 @@ export const useCartStore = defineStore('cart', () => {
       
       return orderInfo
     } catch (error) {
-      // 统一异常处理
       console.error('结账失败:', error)
       throw new Error(error.message || '结账失败')
     }
@@ -304,7 +252,6 @@ export const useCartStore = defineStore('cart', () => {
 
   return {
     items,
-    currentMember,
     discount,
     paymentMethod,
     receivedAmount,
@@ -319,7 +266,6 @@ export const useCartStore = defineStore('cart', () => {
     updateItemQuantity,
     updateItemDiscount,
     clearCart,
-    setMember,
     setDiscount,
     setPaymentMethod,
     setReceivedAmount,

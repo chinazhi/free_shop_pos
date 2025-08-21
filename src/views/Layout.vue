@@ -1,9 +1,10 @@
 <template>
   <div class="layout-container">
     <!-- 侧边栏 -->
-    <div class="sidebar">
+    <div class="sidebar" :class="{ 'collapsed': isCollapsed }">
       <div class="logo">
-        <h2>便利店POS</h2>
+        <h2 v-show="!isCollapsed">便利店POS</h2>
+        <h2 v-show="isCollapsed" class="logo-mini">POS</h2>
       </div>
       <el-menu
         :default-active="$route.path"
@@ -11,6 +12,7 @@
         background-color="#304156"
         text-color="#bfcbd9"
         active-text-color="#409eff"
+        :collapse="isCollapsed"
         router
       >
         <el-menu-item
@@ -29,6 +31,13 @@
       <!-- 顶部栏 -->
       <div class="header">
         <div class="header-left">
+          <el-button
+            type="text"
+            @click="toggleSidebar"
+            class="collapse-btn"
+          >
+            <el-icon><Expand v-if="isCollapsed" /><Fold v-else /></el-icon>
+          </el-button>
           <h3>{{ currentPageTitle }}</h3>
         </div>
         <div class="header-right">
@@ -66,15 +75,14 @@
       <div class="about-content">
         <h3>便利店收银系统</h3>
         <p>版本：v1.0.0</p>
-        <p>基于 Electron + Vue.js 开发</p>
+        <p>基于 Vue 3 + IndexedDB 开发</p>
         <p>适用于小型便利店日常收银管理</p>
         <br>
         <p><strong>主要功能：</strong></p>
         <ul>
           <li>商品销售收银</li>
-          <li>商品库存管理</li>
-          <li>会员积分管理</li>
-          <li>销售报表统计</li>
+          <li>商品信息管理</li>
+          <li>销售记录查询</li>
           <li>系统参数设置</li>
         </ul>
       </div>
@@ -90,6 +98,7 @@ import { ref, computed, onMounted, onUnmounted } from 'vue'
 import { useRoute } from 'vue-router'
 import { useAppStore } from '../stores/app'
 import { useProductsStore } from '../stores/products'
+import { Expand, Fold } from '@element-plus/icons-vue'
 
 const route = useRoute()
 const appStore = useAppStore()
@@ -97,7 +106,13 @@ const productsStore = useProductsStore()
 
 const showAbout = ref(false)
 const currentTime = ref('')
+const isCollapsed = ref(false)
 let timeInterval = null
+
+// 切换侧边栏折叠状态
+const toggleSidebar = () => {
+  isCollapsed.value = !isCollapsed.value
+}
 
 // 菜单路由
 const menuRoutes = [
@@ -110,20 +125,8 @@ const menuRoutes = [
     meta: { title: '商品管理', icon: 'Box' }
   },
   {
-    path: '/inventory',
-    meta: { title: '库存管理', icon: 'Goods' }
-  },
-  {
-    path: '/members',
-    meta: { title: '会员管理', icon: 'User' }
-  },
-  {
     path: '/sales',
     meta: { title: '销售记录', icon: 'Document' }
-  },
-  {
-    path: '/reports',
-    meta: { title: '报表统计', icon: 'DataAnalysis' }
   },
   {
     path: '/settings',
@@ -187,18 +190,33 @@ onUnmounted(() => {
   flex-shrink: 0;
   display: flex;
   flex-direction: column;
+  transition: width 0.3s ease;
+}
+
+.sidebar.collapsed {
+  width: 64px;
 }
 
 .logo {
   padding: 20px;
   text-align: center;
   border-bottom: 1px solid #434a50;
+  transition: padding 0.3s ease;
+}
+
+.sidebar.collapsed .logo {
+  padding: 20px 10px;
 }
 
 .logo h2 {
   margin: 0;
   font-size: 18px;
   color: #409eff;
+  transition: font-size 0.3s ease;
+}
+
+.logo-mini {
+  font-size: 14px !important;
 }
 
 .sidebar-menu {
@@ -209,6 +227,10 @@ onUnmounted(() => {
 .sidebar-menu .el-menu-item {
   height: 50px;
   line-height: 50px;
+}
+
+.sidebar.collapsed .sidebar-menu .el-menu-item {
+  padding: 0 20px;
 }
 
 .main-content {
@@ -229,10 +251,27 @@ onUnmounted(() => {
   box-shadow: 0 1px 4px rgba(0,21,41,.08);
 }
 
+.header-left {
+  display: flex;
+  align-items: center;
+  gap: 15px;
+}
+
 .header-left h3 {
   margin: 0;
   color: #333;
   font-size: 18px;
+}
+
+.collapse-btn {
+  padding: 8px;
+  color: #666;
+  font-size: 18px;
+}
+
+.collapse-btn:hover {
+  color: #409eff;
+  background-color: #f5f7fa;
 }
 
 .header-right {

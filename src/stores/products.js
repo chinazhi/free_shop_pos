@@ -1,5 +1,6 @@
 import { defineStore } from 'pinia'
 import { ref, computed } from 'vue'
+import dbManager from '../utils/indexedDB.js'
 
 export const useProductsStore = defineStore('products', () => {
   // 状态
@@ -8,8 +9,8 @@ export const useProductsStore = defineStore('products', () => {
   const loading = ref(false)
   const searchKeyword = ref('')
   const selectedCategory = ref('')
-  const initialized = ref(false) // 防止重复初始化
-  let initializationPromise = null // 初始化Promise，防止并发初始化
+  const initialized = ref(false)
+  let initializationPromise = null
 
   // 计算属性
   const filteredProducts = computed(() => {
@@ -26,7 +27,11 @@ export const useProductsStore = defineStore('products', () => {
 
     // 按分类筛选
     if (selectedCategory.value) {
-      filtered = filtered.filter(product => product.category === selectedCategory.value)
+      // 根据分类名称查找分类ID
+      const categoryObj = categories.value.find(cat => cat.name === selectedCategory.value)
+      if (categoryObj) {
+        filtered = filtered.filter(product => product.category_id === categoryObj.id)
+      }
     }
 
     return filtered
@@ -40,24 +45,20 @@ export const useProductsStore = defineStore('products', () => {
 
   // 方法
   const loadProducts = async () => {
-    // 如果正在初始化，等待初始化完成
     if (initializationPromise) {
       await initializationPromise
-      // 重新从数据库加载商品
-      const dbProducts = await window.ipcRenderer.invoke('get-products')
+      const dbProducts = await dbManager.getAll('products')
       products.value = dbProducts
       return
     }
     
     try {
       loading.value = true
-      // 从数据库加载商品
-      let dbProducts = await window.ipcRenderer.invoke('get-products')   
+      const dbProducts = await dbManager.getAll('products')
       products.value = dbProducts
       console.log('[loadProducts] products.value:', JSON.parse(JSON.stringify(products.value)))
     } catch (error) {
       console.error('加载商品失败:', error)
-      // 如果初始化失败，重置Promise
       if (initializationPromise) {
         initializationPromise = null
         initialized.value = false
@@ -69,24 +70,23 @@ export const useProductsStore = defineStore('products', () => {
 
   const loadCategories = async () => {
     try {
-      const dbCategories = await window.ipcRenderer.invoke('get-categories')
+      const dbCategories = await dbManager.getAll('categories')
       categories.value = dbCategories
     } catch (error) {
       console.error('加载分类失败:', error)
-      // 如果数据库加载失败，使用默认分类
       categories.value = [
-        { id: 1, name: '饮料', description: '各类饮品' },
-        { id: 2, name: '零食', description: '休闲食品' },
-        { id: 3, name: '日用品', description: '生活用品' },
-        { id: 4, name: '烟酒', description: '烟草酒类' },
-        { id: 5, name: '其他', description: '其他商品' }
+        { id: 1, name: '饮料' },
+        { id: 2, name: '零食' },
+        { id: 3, name: '日用品' },
+        { id: 4, name: '其他' }
       ]
     }
   }
 
   const addCategory = async (categoryData) => {
     try {
-      const newCategory = await window.ipcRenderer.invoke('add-category', categoryData)
+      const id = await dbManager.add('categories', categoryData)
+      const newCategory = { ...categoryData, id }
       categories.value.push(newCategory)
       return newCategory
     } catch (error) {
@@ -97,7 +97,8 @@ export const useProductsStore = defineStore('products', () => {
 
   const updateCategory = async (id, categoryData) => {
     try {
-      const updatedCategory = await window.ipcRenderer.invoke('update-category', id, categoryData)
+      const updatedCategory = { ...categoryData, id }
+      await dbManager.update('categories', updatedCategory)
       const index = categories.value.findIndex(c => c.id === id)
       if (index !== -1) {
         categories.value[index] = updatedCategory
@@ -111,7 +112,7 @@ export const useProductsStore = defineStore('products', () => {
 
   const deleteCategory = async (id) => {
     try {
-      await window.ipcRenderer.invoke('delete-category', id)
+      await dbManager.delete('categories', id)
       const index = categories.value.findIndex(c => c.id === id)
       if (index !== -1) {
         categories.value.splice(index, 1)
@@ -133,9 +134,9 @@ export const useProductsStore = defineStore('products', () => {
       if (productData.barcode && checkBarcodeExists(productData.barcode)) {
         throw new Error(`条码 "${productData.barcode}" 已存在，请使用其他条码`)
       }
-      const newProduct = await window.ipcRenderer.invoke('add-product', productData)
-      // 新增后立即刷新商品列表，确保 id 正确
-      await loadProducts()
+      const id = await dbManager.add('products', productData)
+      const newProduct = { ...productData, id }
+      products.value.push(newProduct)
       return newProduct
     } catch (error) {
       console.error('添加商品失败:', error)
@@ -164,8 +165,8 @@ export const useProductsStore = defineStore('products', () => {
         throw new Error(`条码 "${productData.barcode}" 已存在，请使用其他条码`)
       }
       
-      // 调用主进程更新商品
-      const updatedProduct = await window.ipcRenderer.invoke('update-product', id, productData)
+      const updatedProduct = { ...productData, id }
+      await dbManager.update('products', updatedProduct)
 
       // 更新本地状态
       const index = products.value.findIndex(p => p.id === id)
@@ -182,7 +183,7 @@ export const useProductsStore = defineStore('products', () => {
 
   const deleteProduct = async (id) => {
     try {
-      await window.ipcRenderer.invoke('delete-product', id)
+      await dbManager.delete('products', id)
       const index = products.value.findIndex(p => p.id === id)
       if (index !== -1) {
         products.value.splice(index, 1)
@@ -202,9 +203,8 @@ export const useProductsStore = defineStore('products', () => {
     return products.value.find(p => p.id === id)
   }
 
-  const updateStock = async (productId, quantity, type = 'adjust', reason = '', operator = '系统') => {
+  const updateStock = async (productId, quantity, type = 'adjust') => {
     try {
-      // 参数校验
       const validTypes = ['in', 'out', 'adjust']
       if (!validTypes.includes(type)) {
         throw new Error('无效的库存操作类型')
@@ -212,9 +212,7 @@ export const useProductsStore = defineStore('products', () => {
       if (typeof quantity !== 'number' || isNaN(quantity) || quantity < 0) {
         throw new Error('库存变动数量必须为非负数字')
       }
-      if (type !== 'adjust' && quantity === 0) {
-        throw new Error('入库/出库数量不能为0')
-      }
+      
       const product = getProductById(productId)
       if (!product) {
         throw new Error('商品不存在')
@@ -232,26 +230,15 @@ export const useProductsStore = defineStore('products', () => {
         case 'adjust':
           newStock = quantity
           break
-        default:
-          throw new Error('无效的库存操作类型')
       }
 
       if (newStock < 0) {
         throw new Error('库存不足')
       }
 
-      // 使用事务性库存更新
-      const updatedProduct = await window.ipcRenderer.invoke('update-stock-with-log', productId, {
-        stock: newStock
-      }, {
-        product_id: productId,
-        type: type,
-        quantity: type === 'adjust' ? quantity - oldStock : quantity,
-        before_stock: oldStock,
-        after_stock: newStock,
-        reason: reason,
-        operator: operator
-      })
+      // 更新商品库存
+      const updatedProduct = { ...product, stock: newStock }
+      await dbManager.update('products', updatedProduct)
 
       // 更新本地数据
       const index = products.value.findIndex(p => p.id === productId)
@@ -260,21 +247,9 @@ export const useProductsStore = defineStore('products', () => {
       }
 
       console.log(`库存变动: ${product.name} ${oldStock} -> ${newStock}`)
-
       return updatedProduct
     } catch (error) {
       console.error('更新库存失败:', error)
-      throw error
-    }
-  }
-
-  // 获取库存变动记录
-  const getInventoryLogs = async (filters = {}) => {
-    try {
-      const logs = await window.ipcRenderer.invoke('get-inventory-logs', filters)
-      return logs
-    } catch (error) {
-      console.error('获取库存记录失败:', error)
       throw error
     }
   }
@@ -307,7 +282,6 @@ export const useProductsStore = defineStore('products', () => {
     getProductByBarcode,
     getProductById,
     updateStock,
-    getInventoryLogs,
     setSearchKeyword,
     setSelectedCategory
   }

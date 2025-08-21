@@ -8,6 +8,7 @@ import zhCn from 'element-plus/dist/locale/zh-cn.mjs'
 import App from './App.vue'
 import router from './router'
 import './style.css'
+import dbManager from './utils/indexedDB.js'
 
 const app = createApp(App)
 const pinia = createPinia()
@@ -23,4 +24,11 @@ app.use(ElementPlus, {
   locale: zhCn,
 })
 
-app.mount('#app')
+// 初始化数据库
+dbManager.init().then(() => {
+  console.log('数据库初始化成功')
+  app.mount('#app')
+}).catch(error => {
+  console.error('数据库初始化失败:', error)
+  app.mount('#app')
+})

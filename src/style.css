@@ -331,3 +331,125 @@ html, body {
 
 .border-radius { border-radius: 8px; }
 .shadow { box-shadow: 0 2px 8px rgba(0,0,0,0.1); }
+
+/* 全局字体大小设置 */
+html.font-size-xs {
+  font-size: 12px;
+}
+
+html.font-size-xs .el-button,
+html.font-size-xs .el-input__inner,
+html.font-size-xs .el-select .el-input__inner,
+html.font-size-xs .el-table,
+html.font-size-xs .el-menu-item,
+html.font-size-xs .el-tabs__item,
+html.font-size-xs .el-form-item__label,
+html.font-size-xs .el-dialog__title,
+html.font-size-xs .el-message-box__title {
+  font-size: 12px;
+}
+
+html.font-size-sm {
+  font-size: 14px;
+}
+
+html.font-size-sm .el-button,
+html.font-size-sm .el-input__inner,
+html.font-size-sm .el-select .el-input__inner,
+html.font-size-sm .el-table,
+html.font-size-sm .el-menu-item,
+html.font-size-sm .el-tabs__item,
+html.font-size-sm .el-form-item__label,
+html.font-size-sm .el-dialog__title,
+html.font-size-sm .el-message-box__title {
+  font-size: 14px;
+}
+
+html.font-size-md {
+  font-size: 16px;
+}
+
+html.font-size-md .el-button,
+html.font-size-md .el-input__inner,
+html.font-size-md .el-select .el-input__inner,
+html.font-size-md .el-table,
+html.font-size-md .el-menu-item,
+html.font-size-md .el-tabs__item,
+html.font-size-md .el-form-item__label,
+html.font-size-md .el-dialog__title,
+html.font-size-md .el-message-box__title {
+  font-size: 16px;
+}
+
+html.font-size-lg {
+  font-size: 18px;
+}
+
+html.font-size-lg .el-button,
+html.font-size-lg .el-input__inner,
+html.font-size-lg .el-select .el-input__inner,
+html.font-size-lg .el-table,
+html.font-size-lg .el-menu-item,
+html.font-size-lg .el-tabs__item,
+html.font-size-lg .el-form-item__label,
+html.font-size-lg .el-dialog__title,
+html.font-size-lg .el-message-box__title {
+  font-size: 18px;
+}
+
+html.font-size-xl {
+  font-size: 20px;
+}
+
+html.font-size-xl .el-button,
+html.font-size-xl .el-input__inner,
+html.font-size-xl .el-select .el-input__inner,
+html.font-size-xl .el-table,
+html.font-size-xl .el-menu-item,
+html.font-size-xl .el-tabs__item,
+html.font-size-xl .el-form-item__label,
+html.font-size-xl .el-dialog__title,
+html.font-size-xl .el-message-box__title {
+  font-size: 20px;
+}
+
+html.font-size-xxl {
+  font-size: 24px;
+}
+
+html.font-size-xxl .el-button,
+html.font-size-xxl .el-input__inner,
+html.font-size-xxl .el-select .el-input__inner,
+html.font-size-xxl .el-table,
+html.font-size-xxl .el-menu-item,
+html.font-size-xxl .el-tabs__item,
+html.font-size-xxl .el-form-item__label,
+html.font-size-xxl .el-dialog__title,
+html.font-size-xxl .el-message-box__title {
+  font-size: 24px;
+}
+
+/* 确保标题和重要文本也跟随字体大小变化 */
+html.font-size-xs h1, html.font-size-xs h2, html.font-size-xs h3, html.font-size-xs h4 {
+  font-size: calc(12px * 1.5);
+}
+
+html.font-size-sm h1, html.font-size-sm h2, html.font-size-sm h3, html.font-size-sm h4 {
+  font-size: calc(14px * 1.5);
+}
+
+html.font-size-md h1, html.font-size-md h2, html.font-size-md h3, html.font-size-md h4 {
+  font-size: calc(16px * 1.5);
+}
+
+html.font-size-lg h1, html.font-size-lg h2, html.font-size-lg h3, html.font-size-lg h4 {
+  font-size: calc(18px * 1.5);
+}
+
+html.font-size-xl h1, html.font-size-xl h2, html.font-size-xl h3, html.font-size-xl h4 {
+  font-size: calc(20px * 1.5);
+}
+
+html.font-size-xxl h1, html.font-size-xxl h2, html.font-size-xxl h3, html.font-size-xxl h4 {
+  font-size: calc(24px * 1.5);
+}

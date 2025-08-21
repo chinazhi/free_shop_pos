@@ -123,30 +123,10 @@
           </div>
         </div>
 
-        <!-- 会员信息 -->
-        <div class="member-section">
-          <el-input
-            v-model="memberPhone"
-            placeholder="输入会员手机号"
-            clearable
-            @keyup.enter="searchMember"
-          >
-            <template #prepend>
-              <el-icon><User /></el-icon>
-            </template>
-            <template #append>
-              <el-button @click="searchMember">查找</el-button>
-            </template>
-          </el-input>
-          <div v-if="cartStore.currentMember" class="member-info">
-            <p><strong>{{ cartStore.currentMember.name }}</strong></p>
-            <p>积分: {{ cartStore.currentMember.points }}</p>
-            <p>等级: {{ cartStore.currentMember.level }}</p>
-          </div>
-        </div>
 
-        <!-- 优惠设置 -->
-        <div class="discount-section">
+
+        <!-- 优惠设置 - 隐藏 -->
+        <!-- <div class="discount-section">
           <el-row :gutter="10">
             <el-col :span="12">
               <el-input
@@ -169,7 +149,7 @@
               </el-select>
             </el-col>
           </el-row>
-        </div>
+        </div> -->
 
         <!-- 金额汇总 -->
         <div class="amount-summary">
@@ -188,19 +168,18 @@
         </div>
 
         <!-- 收款区域 -->
-        <div class="payment-section" v-if="cartStore.paymentMethod === 'cash'">
+        <div class="payment-section">
           <el-input
-            v-model.number="cartStore.receivedAmount"
+            :value="cartStore.totalAmount.toFixed(2)"
             placeholder="收款金额"
             size="large"
-            type="number"
-            :min="0"
+            readonly
           >
             <template #prepend>收款</template>
             <template #append>元</template>
           </el-input>
-          <div v-if="cartStore.receivedAmount >= cartStore.totalAmount" class="change-amount">
-            找零: ¥{{ cartStore.changeAmount.toFixed(2) }}
+          <div class="payment-info">
+            <span>支付方式: 微信支付</span>
           </div>
         </div>
 
@@ -270,8 +249,7 @@ const appStore = useAppStore()
 // 响应式数据
 const searchKeyword = ref('')
 const selectedCategory = ref('')
-const memberPhone = ref('')
-const customDiscount = ref(0)
+const customDiscount = ref(0) // 默认折扣为0
 const showReceiptDialog = ref(false)
 const lastOrderNo = ref('')
 const lastOrderItems = ref([])
@@ -281,6 +259,12 @@ const lastOrderTotal = ref(0)
 const lastPaymentMethod = ref('')
 const lastReceivedAmount = ref(0)
 const lastChangeAmount = ref(0)
+
+// 初始化默认设置
+if (cartStore.paymentMethod !== 'wechat') {
+  cartStore.paymentMethod = 'wechat' // 默认支付方式为微信
+}
+cartStore.setDiscount(0) // 默认折扣为0
 
 // 计算属性
 const filteredProducts = computed(() => {
@@ -296,18 +280,18 @@ const filteredProducts = computed(() => {
   }
   
   if (selectedCategory.value) {
-    products = products.filter(p => p.category === selectedCategory.value)
+    // 根据分类名称查找分类ID
+    const categoryObj = productsStore.categories.find(cat => cat.name === selectedCategory.value)
+    if (categoryObj) {
+      products = products.filter(p => p.category_id === categoryObj.id)
+    }
   }
   
   return products
 })
 
 const canCheckout = computed(() => {
-  if (cartStore.items.length === 0) return false
-  if (cartStore.paymentMethod === 'cash') {
-    return cartStore.receivedAmount >= cartStore.totalAmount
-  }
-  return true
+  return cartStore.items.length > 0
 })
 
 // 监听搜索关键词变化
@@ -372,25 +356,7 @@ const getProductStock = (productId) => {
   return product?.stock || 0
 }
 
-const searchMember = () => {
-  if (!memberPhone.value.trim()) {
-    cartStore.setMember(null)
-    return
-  }
-  
-  // 这里后续会从数据库查找会员
-  // 暂时使用模拟数据
-  const mockMember = {
-    id: 1,
-    name: '张三',
-    phone: memberPhone.value,
-    points: 1200,
-    level: 'gold'
-  }
-  
-  cartStore.setMember(mockMember)
-  ElMessage.success('会员信息已加载')
-}
+
 
 const setDiscount = () => {
   cartStore.setDiscount(customDiscount.value || 0)
@@ -398,6 +364,11 @@ const setDiscount = () => {
 
 const handleCheckout = async () => {
   try {
+    // 设置收款金额（对于非现金支付，收款金额等于总金额）
+    if (cartStore.paymentMethod !== 'cash') {
+      cartStore.setReceivedAmount(cartStore.totalAmount)
+    }
+    
     const result = await cartStore.checkout()
     
     // 保存订单信息用于显示小票
@@ -413,7 +384,6 @@ const handleCheckout = async () => {
     showReceiptDialog.value = true
     
     // 重置表单
-    memberPhone.value = ''
     customDiscount.value = 0
     
     ElMessage.success('结账成功！')
@@ -598,22 +568,9 @@ const printReceipt = () => {
   text-align: right;
 }
 
-.member-section,
 .discount-section {
   padding: 15px 20px;
   border-bottom: 1px solid #f0f0f0;
-}
-
-.member-info {
-  margin-top: 10px;
-  padding: 10px;
-  background: #f8f9fa;
-  border-radius: 4px;
-}
-
-.member-info p {
-  margin: 5px 0;
-  font-size: 14px;
 }
 
 .amount-summary {
@@ -646,11 +603,10 @@ const printReceipt = () => {
   border-bottom: 1px solid #f0f0f0;
 }
 
-.change-amount {
+.payment-info {
   margin-top: 10px;
-  font-size: 16px;
-  font-weight: 600;
-  color: #67c23a;
+  font-size: 14px;
+  color: #666;
   text-align: center;
 }
 

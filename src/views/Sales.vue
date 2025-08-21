@@ -46,37 +46,11 @@
     </div>
 
     <!-- 搜索和筛选栏 -->
-    <div class="search-bar">
-      <el-row :gutter="20" align="middle">
-        <el-col :span="5">
-          <el-input
-            v-model="searchKeyword"
-            placeholder="搜索订单号或收银员"
-            clearable
-          >
-            <template #prefix>
-              <el-icon><Search /></el-icon>
-            </template>
-          </el-input>
-        </el-col>
-        <el-col :span="4">
-          <el-select v-model="statusFilter" placeholder="订单状态" clearable>
-            <el-option label="全部状态" value="" />
-            <el-option label="已完成" value="completed" />
-            <el-option label="已退款" value="refunded" />
-            <el-option label="部分退款" value="partial_refund" />
-          </el-select>
-        </el-col>
-        <el-col :span="4">
-          <el-select v-model="paymentFilter" placeholder="支付方式" clearable>
-            <el-option label="全部方式" value="" />
-            <el-option label="现金" value="cash" />
-            <el-option label="微信" value="wechat" />
-            <el-option label="支付宝" value="alipay" />
-            <el-option label="银行卡" value="card" />
-          </el-select>
-        </el-col>
-        <el-col :span="7">
+    <div class="search-filter-container">
+      <!-- 筛选条件区域 -->
+      <div class="filter-section">
+        <div class="filter-item">
+          <label class="filter-label">时间范围：</label>
           <el-date-picker
             v-model="dateRange"
             type="datetimerange"
@@ -86,21 +60,34 @@
             size="default"
             format="YYYY-MM-DD HH:mm"
             value-format="YYYY-MM-DD HH:mm:ss"
+            class="date-range-picker"
           />
-        </el-col>
-        <el-col :span="4">
-          <div class="button-group">
-            <el-button @click="handleExport">
-              <el-icon><Download /></el-icon>
-              导出
-            </el-button>
-            <el-button type="primary" @click="refreshData">
-              <el-icon><Refresh /></el-icon>
-              刷新
-            </el-button>
-          </div>
-        </el-col>
-      </el-row>
+        </div>
+        <div class="filter-item">
+          <label class="filter-label">订单状态：</label>
+          <el-select 
+            v-model="statusFilter" 
+            placeholder="请选择状态" 
+            clearable
+            class="status-select"
+          >
+            <el-option label="全部状态" value="" />
+            <el-option label="已完成" value="completed" />
+            <el-option label="已退款" value="refunded" />
+            <el-option label="部分退款" value="partial_refund" />
+          </el-select>
+        </div>
+        <div class="filter-item refresh-item">
+          <el-button type="primary" @click="refreshData" class="refresh-button">
+            <el-icon><Refresh /></el-icon>
+            刷新数据
+          </el-button>
+        </div>
+        <div class="filter-item column-settings-item">
+          <el-button type="default" @click="showColumnSettings = true" class="column-settings-button" :icon="Setting">
+          </el-button>
+        </div>
+      </div>
     </div>
 
     <!-- 销售记录表格 -->
@@ -109,26 +96,26 @@
         :data="paginatedSales"
         stripe
         border
-        style="width: 100%"
         @selection-change="handleSelectionChange"
         v-loading="loading"
+        class="sales-table"
       >
         <el-table-column type="selection" width="55" />
-        <el-table-column prop="order_no" label="订单号" width="150" />
-        <el-table-column prop="cashier" label="收银员" width="100" />
-        <el-table-column prop="member_name" label="会员" width="120">
+        <el-table-column v-if="columnVisibility.order_no" prop="order_no" label="订单号" width="180" align="center" />
+        <el-table-column v-if="columnVisibility.cashier" prop="cashier" label="收银员" width="80" align="center" />
+        <el-table-column v-if="columnVisibility.member_name" prop="member_name" label="会员" width="120" align="center">
           <template #default="{ row }">
             <span v-if="row.member_name">{{ row.member_name }}</span>
             <el-text v-else type="info">散客</el-text>
           </template>
         </el-table-column>
-        <el-table-column prop="items_count" label="商品数" width="80" align="center" />
-        <el-table-column prop="subtotal" label="小计" width="100" align="right">
+        <el-table-column v-if="columnVisibility.items_count" prop="items_count" label="商品数" width="80" align="center" />
+        <el-table-column v-if="columnVisibility.subtotal" prop="subtotal" label="小计" width="100" align="center">
           <template #default="{ row }">
             ¥{{ row.subtotal.toFixed(2) }}
           </template>
         </el-table-column>
-        <el-table-column prop="discount_amount" label="折扣" width="100" align="right">
+        <el-table-column v-if="columnVisibility.discount_amount" prop="discount_amount" label="折扣" width="80" align="center">
           <template #default="{ row }">
             <span v-if="row.discount_amount > 0" class="discount-amount">
               -¥{{ row.discount_amount.toFixed(2) }}
@@ -136,61 +123,63 @@
             <span v-else>-</span>
           </template>
         </el-table-column>
-        <el-table-column prop="tax_amount" label="税费" width="100" align="right">
+        <el-table-column v-if="columnVisibility.tax_amount" prop="tax_amount" label="税费" width="100" align="center">
           <template #default="{ row }">
             ¥{{ row.tax_amount.toFixed(2) }}
           </template>
         </el-table-column>
-        <el-table-column prop="total_amount" label="总计" width="120" align="right">
+        <el-table-column v-if="columnVisibility.total_amount" prop="total_amount" label="总计" width="120" align="center">
           <template #default="{ row }">
             <el-text type="primary" size="large" tag="b">
               ¥{{ row.total_amount.toFixed(2) }}
             </el-text>
           </template>
         </el-table-column>
-        <el-table-column prop="payment_method" label="支付方式" width="100" align="center">
+        <el-table-column v-if="columnVisibility.payment_method" prop="payment_method" label="支付方式" width="100" align="center">
           <template #default="{ row }">
             <el-tag :type="getPaymentTagType(row.payment_method)" size="small">
               {{ getPaymentText(row.payment_method) }}
             </el-tag>
           </template>
         </el-table-column>
-        <el-table-column prop="status" label="状态" width="100" align="center">
+        <el-table-column v-if="columnVisibility.status" prop="status" label="状态" width="100" align="center">
           <template #default="{ row }">
             <el-tag :type="getStatusTagType(row.status)" size="small">
               {{ getStatusText(row.status) }}
             </el-tag>
           </template>
         </el-table-column>
-        <el-table-column prop="created_at" label="交易时间" width="180">
+        <el-table-column v-if="columnVisibility.created_at" prop="created_at" label="交易时间" width="180" align="center">
           <template #default="{ row }">
             {{ formatDateTime(row.created_at) }}
           </template>
         </el-table-column>
-        <el-table-column label="操作" width="200" fixed="right">
+        <el-table-column label="操作" width="240" fixed="right">
           <template #default="{ row }">
-            <el-button type="primary" size="small" @click="viewOrder(row)">
-              详情
-            </el-button>
-            <el-button type="info" size="small" @click="printReceipt(row)">
-              打印
-            </el-button>
-            <el-button 
-              v-if="row.status === 'completed' && (!row.refund_amount || row.refund_amount === 0)"
-              type="warning" 
-              size="small" 
-              @click="handleRefundOrder(row)"
-            >
-              退款
-            </el-button>
-            <el-button 
-              v-if="row.status === 'partial_refund'"
-              type="warning" 
-              size="small" 
-              @click="handleRefundOrder(row)"
-            >
-              继续退款
-            </el-button>
+            <div class="action-buttons">
+              <el-button type="primary" size="small" @click="viewOrder(row)">
+                详情
+              </el-button>
+              <el-button type="info" size="small" @click="printReceipt(row)">
+                打印
+              </el-button>
+              <el-button 
+                v-if="row.status === 'completed' && (!row.refund_amount || row.refund_amount === 0)"
+                type="warning" 
+                size="small" 
+                @click="handleRefundOrder(row)"
+              >
+                退款
+              </el-button>
+              <el-button 
+                v-if="row.status === 'partial_refund'"
+                type="warning" 
+                size="small" 
+                @click="handleRefundOrder(row)"
+              >
+                继续退款
+              </el-button>
+            </div>
           </template>
         </el-table-column>
       </el-table>
@@ -392,13 +381,33 @@
         <el-button type="danger" @click="confirmRefund">确认退款</el-button>
       </template>
     </el-dialog>
+
+    <!-- 列设置对话框 -->
+    <el-dialog
+      v-model="showColumnSettings"
+      title="列显示设置"
+      width="400px"
+      :close-on-click-modal="false"
+    >
+      <div class="column-settings">
+        <div class="column-item" v-for="(label, key) in columnLabels" :key="key">
+          <el-checkbox v-model="columnVisibility[key]">
+            {{ label }}
+          </el-checkbox>
+        </div>
+      </div>
+      <template #footer>
+        <el-button @click="resetColumns">重置</el-button>
+        <el-button type="primary" @click="showColumnSettings = false">确定</el-button>
+      </template>
+    </el-dialog>
   </div>
 </template>
 
 <script setup>
 import { ref, computed, reactive, onMounted } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
-const ipcRenderer = window.ipcRenderer
+import { Setting } from '@element-plus/icons-vue'
 
 // 响应式数据
 const loading = ref(false)
@@ -416,33 +425,113 @@ const refundOrder = ref(null)
 const refundType = ref('full')
 const refundAmount = ref(0)
 const refundReason = ref('')
+const showColumnSettings = ref(false)
+
+// 列显示控制
+const columnVisibility = ref({
+  order_no: true,
+  cashier: true,
+  member_name: false,
+  items_count: true,
+  subtotal: true,
+  discount_amount: false,
+  tax_amount: false,
+  total_amount: true,
+  payment_method: true,
+  status: true,
+  created_at: true
+})
+
+// 列标签映射
+const columnLabels = {
+  order_no: '订单号',
+  cashier: '收银员',
+  member_name: '会员',
+  items_count: '商品数',
+  subtotal: '小计',
+  discount_amount: '折扣',
+  tax_amount: '税费',
+  total_amount: '总计',
+  payment_method: '支付方式',
+  status: '状态',
+  created_at: '交易时间'
+}
+
+// 重置列显示
+const resetColumns = () => {
+  Object.keys(columnVisibility.value).forEach(key => {
+    columnVisibility.value[key] = true
+  })
+}
 
 // 销售数据
 const sales = ref([])
 const orderItems = ref([])
 
+// 在 script setup 部分，添加导入
+import dbManager from '../utils/indexedDB.js'
+
+// 修改 loadSales 函数
 async function loadSales() {
   loading.value = true
-  let sql = `SELECT s.id, s.order_no, s.cashier, m.name as member_name, s.total_amount, s.discount_amount, s.tax_amount, s.final_amount, s.payment_method, s.payment_status as status, s.refund_amount, s.refund_reason, s.refund_time, s.created_at,
-    (SELECT COUNT(*) FROM sale_items si WHERE si.sale_id = s.id) as items_count,
-    s.final_amount as subtotal, 0 as received_amount, 0 as change_amount
-    FROM sales s LEFT JOIN members m ON s.member_id = m.id ORDER BY s.created_at DESC`;
   try {
-    const result = await ipcRenderer.invoke('db-query', sql)
-    sales.value = result
+    // 确保数据库已初始化
+    if (!dbManager.db) {
+      await dbManager.init()
+    }
+    
+    // 获取销售记录
+    const salesData = await dbManager.getAll('sales')
+    
+    // 为每条记录添加商品数量统计
+    for (const sale of salesData) {
+      const items = await dbManager.getAllByIndex('sale_items', 'sale_id', sale.id)
+      sale.items_count = items.length
+      sale.subtotal = sale.final_amount || sale.total_amount || 0
+      sale.total_amount = sale.final_amount || sale.total_amount || 0
+      sale.member_name = null // 暂时设为null，因为已移除会员功能
+      sale.received_amount = sale.received_amount || 0
+      sale.change_amount = sale.change_amount || 0
+      sale.status = sale.payment_status || 'completed'
+      sale.created_at = sale.sale_date || sale.created_at || new Date().toISOString()
+      sale.order_no = sale.order_no || `ORDER-${sale.id}`
+      sale.cashier = sale.cashier || '收银员'
+      sale.discount_amount = sale.discount_amount || 0
+      sale.tax_amount = sale.tax_amount || 0
+    }
+    
+    sales.value = salesData.sort((a, b) => new Date(b.created_at) - new Date(a.created_at))
   } catch (e) {
-    ElMessage.error('加载销售数据失败')
+    console.error('加载销售数据失败:', e)
+    ElMessage.error('加载销售数据失败: ' + e.message)
   } finally {
     loading.value = false
   }
 }
 
+// 修改 loadOrderItems 函数
 async function loadOrderItems(orderId) {
-  let sql = `SELECT p.name as product_name, si.unit_price as price, si.quantity, si.discount as discount_amount, si.total_price as subtotal
-    FROM sale_items si JOIN products p ON si.product_id = p.id WHERE si.sale_id = ?`;
   try {
-    orderItems.value = await ipcRenderer.invoke('db-query', sql, [orderId])
+    if (!dbManager.db) {
+      await dbManager.init()
+    }
+    
+    const items = await dbManager.getAllByIndex('sale_items', 'sale_id', orderId)
+    
+    // 获取商品详细信息
+    for (const item of items) {
+      const product = await dbManager.getById('products', item.product_id)
+      if (product) {
+        item.product_name = product.name
+        item.price = item.unit_price || product.price
+        item.discount_amount = item.discount || 0
+        item.subtotal = item.total_price || (item.quantity * item.price)
+      }
+    }
+    
+    orderItems.value = items
   } catch (e) {
+    console.error('加载订单明细失败:', e)
     orderItems.value = []
   }
 }
@@ -513,13 +602,13 @@ const todayRevenue = computed(() => {
       new Date(s.created_at).toDateString() === today &&
       s.status !== 'refunded'
     )
-    .reduce((sum, s) => sum + s.total_amount, 0)
+    .reduce((sum, s) => sum + (s.total_amount || 0), 0)
 })
 
 const averageOrderValue = computed(() => {
   const completedSales = sales.value.filter(s => s.status === 'completed')
   if (completedSales.length === 0) return 0
-  const total = completedSales.reduce((sum, s) => sum + s.total_amount, 0)
+  const total = completedSales.reduce((sum, s) => sum + (s.total_amount || 0), 0)
   return total / completedSales.length
 })
 
@@ -530,7 +619,7 @@ const totalItems = computed(() => {
       new Date(s.created_at).toDateString() === today &&
       s.status !== 'refunded'
     )
-    .reduce((sum, s) => sum + s.items_count, 0)
+    .reduce((sum, s) => sum + (s.items_count || 0), 0)
 })
 
 // 方法
@@ -641,9 +730,18 @@ const confirmRefund = async () => {
     const newStatus = newRefundAmount >= refundOrder.value.total_amount ? 'refunded' : 'partial_refund'
     
     // 更新数据库中的订单状态
-    const updateSql = 'UPDATE sales SET payment_status = ?, refund_amount = ?, refund_reason = ?, refund_time = datetime("now", "localtime") WHERE id = ?'
+    if (!dbManager.db) {
+      await dbManager.init()
+    }
     
-    await ipcRenderer.invoke('db-run', updateSql, [newStatus, newRefundAmount, refundReason.value, refundOrder.value.id])
+    const sale = await dbManager.getById('sales', refundOrder.value.id)
+    if (sale) {
+      sale.payment_status = newStatus
+      sale.refund_amount = newRefundAmount
+      sale.refund_reason = refundReason.value
+      sale.refund_time = new Date().toISOString()
+      await dbManager.update('sales', sale)
+    }
     
     // 更新前端显示的订单状态
     const index = sales.value.findIndex(s => s.id === refundOrder.value.id)
@@ -745,18 +843,50 @@ onMounted(() => {
   margin: 0;
 }
 
-.search-bar {
+.search-filter-container {
   background: white;
-  padding: 20px;
   border-radius: 8px;
   margin-bottom: 20px;
   box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+  border: 1px solid #e8e8e8;
 }
 
-.button-group {
+.filter-section {
+  padding: 20px 24px;
   display: flex;
-  gap: 10px;
-  justify-content: flex-end;
+  align-items: center;
+  gap: 32px;
+  justify-content: space-between;
+}
+
+.filter-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.refresh-item {
+  margin-left: auto;
+}
+
+.filter-label {
+  font-size: 14px;
+  color: #606266;
+  font-weight: 500;
+  white-space: nowrap;
+  min-width: 70px;
+}
+
+.date-range-picker {
+  width: 320px;
+}
+
+.status-select {
+  width: 160px;
+}
+
+.refresh-button {
+  min-width: 100px;
 }
 
 .table-container {
@@ -764,6 +894,23 @@ onMounted(() => {
   border-radius: 8px;
   padding: 20px;
   box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+}
+
+.sales-table {
+  width: 100%;
+}
+
+.el-table {
+  border-radius: 8px;
+  overflow: hidden;
+}
+
+.action-buttons {
+  display: flex;
+  gap: 6px;
+  flex-wrap: nowrap;
+  align-items: center;
+  justify-content: flex-start;
 }
 
 .pagination {
@@ -841,22 +988,27 @@ onMounted(() => {
   font-weight: 500;
 }
 
-@media (max-width: 768px) {
-  .stats-grid {
-    grid-template-columns: 1fr;
-  }
-  
-  .search-bar .el-row {
-    flex-direction: column;
-    gap: 15px;
-  }
-  
-  .button-group {
-    justify-content: flex-start;
-    flex-wrap: wrap;
-  }
+/* 电脑端专用样式，无需响应式 */
+
+.column-settings-item {
+  margin-left: 4px;
+}
+
+.column-settings-button {
+  background: #f5f7fa;
+  border-color: #dcdfe6;
+  color: #606266;
+}
+
+.column-settings {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 12px;
+  padding: 8px 0;
+}
+
+.column-item {
+  display: flex;
+  align-items: center;
 }
 </style>
-
-// 保证组件能被动态导入
-export default {}

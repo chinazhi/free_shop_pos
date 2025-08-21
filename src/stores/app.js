@@ -1,5 +1,6 @@
 import { defineStore } from 'pinia'
 import { ref, reactive } from 'vue'
+import { useSettingsStore } from './settings.js'
 
 export const useAppStore = defineStore('app', () => {
   const isLoading = ref(false)
@@ -24,12 +25,10 @@ export const useAppStore = defineStore('app', () => {
 
   const loadSettings = async () => {
     try {
-      const settingsArr = await window.ipcRenderer.invoke('get-settings')
-      if (Array.isArray(settingsArr)) {
-        settingsArr.forEach(s => {
-          settings[s.key.replace(/_([a-z])/g, (m, p1) => p1.toUpperCase())] = parseSettingValue(s.value)
-        })
-      }
+      const settingsStore = useSettingsStore()
+      await settingsStore.loadSettings()
+      // 将设置复制到本地reactive对象
+      Object.assign(settings, settingsStore.settings)
     } catch (e) {
       console.error('加载系统设置失败:', e)
     }
@@ -37,14 +36,9 @@ export const useAppStore = defineStore('app', () => {
 
   const updateSettings = async (newSettings) => {
     try {
+      const settingsStore = useSettingsStore()
+      await settingsStore.updateSettings(newSettings)
       Object.assign(settings, newSettings)
-      const settingsArr = Object.entries(newSettings).map(([k, v]) => {
-        let dbKey = k.replace(/([A-Z])/g, '_$1').toLowerCase()
-        let value = typeof v === 'object' ? JSON.stringify(v) : v
-        if (typeof v === 'boolean') value = v ? 'true' : 'false'
-        return { key: dbKey, value }
-      })
-      await window.ipcRenderer.invoke('update-settings', settingsArr)
     } catch (e) {
       console.error('保存系统设置失败:', e)
       throw e

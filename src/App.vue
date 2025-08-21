@@ -10,9 +10,15 @@ import { useAppStore } from './stores/app'
 
 const appStore = useAppStore()
 
-onMounted(() => {
+onMounted(async () => {
   // 初始化应用
-  appStore.initApp()
+  await appStore.initApp()
+  
+  // 应用字体大小设置
+  const fontSize = appStore.settings.fontSize || 'md'
+  const root = document.documentElement
+  root.classList.remove('font-size-xs', 'font-size-sm', 'font-size-md', 'font-size-lg', 'font-size-xl', 'font-size-xxl')
+  root.classList.add(`font-size-${fontSize}`)
 })
 </script>
 
